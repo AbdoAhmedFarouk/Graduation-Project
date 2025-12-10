@@ -1,120 +1,221 @@
 import * as THREE from "three";
 
+import { useEffect, useRef } from "react";
 import { useThree } from "@react-three/fiber";
-import { useEffect, useRef, useState } from "react";
+
+import { useShallow } from "zustand/shallow";
 
 import GhostPlane from "./GhostPlane";
 import ScreenGrid from "./ScreenGrid";
 
 import { useSceneStore } from "@/app/_store/store";
 import { useGetMousePosition } from "@/app/_hooks/useGetMousePosition";
-import { GEOMETRIES_TYPE } from "@/app/_validators/deisgnPageGeometries";
 
-type SceneProps = {
-  createMode: boolean;
-  onPlaced: () => void;
-  desiredShape: keyof typeof GEOMETRIES_TYPE | "";
-};
+import { GEOMETRIES_TYPE } from "@/app/_validators/sceneGeometries";
 
-export default function Scene({
-  createMode,
-  onPlaced,
-  desiredShape,
-}: SceneProps) {
-  const [ghostPos, setGhostPos] = useState<THREE.Vector3 | null>(null); // make it global and all states too
-  const { setSelectedObject } = useSceneStore((state) => state);
+import { Grid } from "@react-three/drei";
+import {
+  EffectComposer,
+  OutlinePass,
+  RenderPass,
+} from "three/examples/jsm/Addons.js";
+
+export default function Scene() {
+  const {
+    createMode,
+    ghostPos,
+    desiredShape,
+    sceneObjects,
+    hoveredObjectId,
+
+    setHoveredObjectId,
+    setSelectedGeometry,
+    setGhostPos,
+    setCreateMode,
+    setSceneObjects,
+  } = useSceneStore(
+    useShallow((state) => ({
+      sceneObjects: state.sceneObjects,
+      hoveredObjectId: state.hoveredObjectId,
+      createMode: state.createMode,
+      ghostPos: state.ghostPos,
+      desiredShape: state.desiredShape,
+
+      setHoveredObjectId: state.setHoveredObjectId,
+      setSelectedGeometry: state.setSelectedGeometry,
+      setGhostPos: state.setGhostPos,
+      setCreateMode: state.setCreateMode,
+      setSceneObjects: state.setSceneObjects,
+    }))
+  );
 
   const draggedObject = useRef<THREE.Mesh | null>(null);
   const isDragging = useRef(false);
 
-  const { scene, gl } = useThree();
-
+  const { scene, gl, camera, size } = useThree();
   const { getPointerPosition, raycaster } = useGetMousePosition();
 
-  const onPointerMove = (e: MouseEvent) => {
-    if (!createMode || !desiredShape) return;
+  console.log(scene);
 
-    getPointerPosition(e);
+  const composer = useRef<EffectComposer | null>(null);
+  const outlinePass = useRef<OutlinePass | null>(null);
 
-    const gridPlane = scene.getObjectByName("gridPlane");
-    const hit = raycaster.intersectObject(gridPlane!);
+  useEffect(() => {
+    gl.outputColorSpace = THREE.SRGBColorSpace;
+    gl.toneMapping = THREE.ACESFilmicToneMapping;
+    gl.toneMappingExposure = 1;
+  }, [gl]);
 
-    if (hit.length) {
-      const p = hit[0].point.clone();
-      setGhostPos(p);
-    }
-  };
+  useEffect(() => {
+    const comp = new EffectComposer(gl);
+    comp.addPass(new RenderPass(scene, camera));
 
-  const onClick = () => {
-    if (!createMode || !ghostPos || !desiredShape) return;
-
-    const geometry = new THREE.Mesh(
-      GEOMETRIES_TYPE[desiredShape],
-      new THREE.MeshStandardMaterial({
-        color: "#eeba2c",
-        side: THREE.DoubleSide,
-      })
+    const outline = new OutlinePass(
+      new THREE.Vector2(size.width, size.height),
+      scene,
+      camera
     );
-    geometry.position.copy(ghostPos);
-    scene.add(geometry);
 
-    onPlaced();
+    outline.edgeStrength = 5;
+    outline.edgeThickness = 2;
+    outline.edgeGlow = 0.3;
+    outline.visibleEdgeColor.set("#ffffff");
+    outline.hiddenEdgeColor.set("#000000");
+
+    comp.addPass(outline);
+
+    composer.current = comp;
+    outlinePass.current = outline;
+
+    return () => {
+      comp.dispose();
+    };
+  }, [scene, camera, gl, size]);
+
+  useEffect(() => {
+    const render = () => {
+      composer.current?.render();
+    };
+    gl.setAnimationLoop(render);
+
+    return () => {
+      gl.setAnimationLoop(null);
+    };
+  }, [gl]);
+
+  useEffect(() => {
+    if (!outlinePass.current) return;
+
+    const mesh = sceneObjects.find((obj) => obj.uuid === hoveredObjectId);
+
+    if (mesh instanceof THREE.Mesh) {
+      outlinePass.current.selectedObjects = [mesh];
+    } else {
+      outlinePass.current.selectedObjects = [];
+    }
+  }, [hoveredObjectId, sceneObjects]);
+
+  const getGridIntersection = (e: MouseEvent) => {
+    getPointerPosition(e);
+    const gridPlane = scene.getObjectByName("gridPlane");
+    if (!gridPlane) return null;
+
+    const hits = raycaster.intersectObject(gridPlane);
+    return hits.length ? hits[0].point : null;
   };
 
-  const onSceneClick = (e: MouseEvent) => {
-    if (createMode) return;
-
+  const getSceneIntersection = (e: MouseEvent) => {
     getPointerPosition(e);
 
     const objects = scene.children.filter(
       (obj) => obj.name !== "gridPlane" && obj.name !== "ground"
     );
 
-    const hits = raycaster.intersectObjects(objects);
+    const hits = raycaster.intersectObjects(objects, true);
+    return hits.length ? hits[0].object : null;
+  };
 
-    if (hits.length > 0) {
-      const selectedGemoetry = hits[0].object;
-      if (selectedGemoetry instanceof THREE.Mesh) {
-        console.log("Selected object:", selectedGemoetry);
+  const onHover = (e: MouseEvent) => {
+    if (!outlinePass.current || isDragging.current) return;
 
-        draggedObject.current = selectedGemoetry;
-        isDragging.current = true;
+    const hit = getSceneIntersection(e);
 
-        const { material, position, scale, rotation, geometry, visible } =
-          selectedGemoetry;
-
-        setSelectedObject({
-          id: selectedGemoetry.uuid,
-          material,
-          position,
-          scale,
-          rotation,
-          geometry,
-          visible,
-        });
-      } else {
-        console.log(
-          "selectedGemoetry object (no geometry):",
-          selectedGemoetry.type
-        );
-      }
+    if (hit instanceof THREE.Mesh) {
+      outlinePass.current.selectedObjects = [hit];
+      setHoveredObjectId(hit.uuid);
+    } else {
+      outlinePass.current.selectedObjects = [];
+      setHoveredObjectId(null);
     }
+  };
+
+  const onPointerMove = (e: MouseEvent) => {
+    if (!createMode || !desiredShape) return;
+
+    const point = getGridIntersection(e);
+    if (point) setGhostPos(point.clone());
+  };
+
+  const onClick = () => {
+    if (!createMode || !ghostPos || !desiredShape) return;
+
+    const geometry = GEOMETRIES_TYPE[desiredShape]();
+    const material = new THREE.MeshStandardMaterial({
+      color: "#eeba2c",
+      side: THREE.DoubleSide,
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+
+    mesh.userData.type = geometry.userData.type;
+    mesh.position.copy(ghostPos);
+
+    setSceneObjects(mesh);
+    scene.add(mesh);
+    setGhostPos(null);
+    setCreateMode(false);
+  };
+
+  const onPointerDown = (e: MouseEvent) => {
+    if (createMode) return;
+
+    const hit = getSceneIntersection(e);
+    if (!(hit instanceof THREE.Mesh)) return;
+
+    draggedObject.current = hit;
+    isDragging.current = true;
+
+    const {
+      uuid,
+      userData,
+      material,
+      position,
+      scale,
+      rotation,
+      geometry,
+      visible,
+    } = hit;
+
+    setSelectedGeometry({
+      id: uuid,
+      userData,
+      material,
+      position,
+      scale,
+      rotation,
+      geometry,
+      visible,
+    });
   };
 
   const onPointerMoveForDrag = (e: MouseEvent) => {
     if (!isDragging.current || !draggedObject.current) return;
 
-    getPointerPosition(e);
+    const point = getGridIntersection(e);
+    if (!point) return;
 
-    const gridPlane = scene.getObjectByName("gridPlane");
-    const hit = raycaster.intersectObject(gridPlane!);
-
-    if (hit.length) {
-      const p = hit[0].point;
-
-      draggedObject.current.position.x = p.x;
-      draggedObject.current.position.y = p.y;
-    }
+    draggedObject.current.position.x = point.x;
+    draggedObject.current.position.y = point.y;
   };
 
   const onPointerUpForDrag = () => {
@@ -123,20 +224,22 @@ export default function Scene({
   };
 
   useEffect(() => {
-    gl.domElement.addEventListener("mousemove", onPointerMove);
-    gl.domElement.addEventListener("click", onClick);
-    gl.domElement.addEventListener("pointerdown", onSceneClick);
+    const dom = gl.domElement;
 
-    gl.domElement.addEventListener("pointermove", onPointerMoveForDrag);
-    gl.domElement.addEventListener("pointerup", onPointerUpForDrag);
+    dom.addEventListener("mousemove", onPointerMove);
+    dom.addEventListener("mousemove", onHover);
+    dom.addEventListener("click", onClick);
+    dom.addEventListener("pointerdown", onPointerDown);
+    dom.addEventListener("pointermove", onPointerMoveForDrag);
+    dom.addEventListener("pointerup", onPointerUpForDrag);
 
     return () => {
-      gl.domElement.removeEventListener("mousemove", onPointerMove);
-      gl.domElement.removeEventListener("click", onClick);
-      gl.domElement.removeEventListener("pointerdown", onSceneClick);
-
-      gl.domElement.removeEventListener("pointermove", onPointerMoveForDrag);
-      gl.domElement.removeEventListener("pointerup", onPointerUpForDrag);
+      dom.removeEventListener("mousemove", onPointerMove);
+      dom.removeEventListener("mousemove", onHover);
+      dom.removeEventListener("click", onClick);
+      dom.removeEventListener("pointerdown", onPointerDown);
+      dom.removeEventListener("pointermove", onPointerMoveForDrag);
+      dom.removeEventListener("pointerup", onPointerUpForDrag);
     };
   });
 
@@ -146,6 +249,7 @@ export default function Scene({
         <planeGeometry args={[200, 200]} />
         <ScreenGrid />
         <meshBasicMaterial />
+        <Grid cellColor={0xffffff} cellThickness={1} cellSize={1} />
       </mesh>
 
       {createMode && ghostPos && (

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-export default function PolygonGeometry(sides = 5, radius = 1) {
+export default function PolygonGeometry(sides = 5, radius = 0.7) {
   const geometry = new THREE.BufferGeometry();
   const vertices: number[] = [];
   const indices: number[] = [];
@@ -10,7 +10,7 @@ export default function PolygonGeometry(sides = 5, radius = 1) {
   vertices.push(0, 0, 0);
 
   for (let i = 0; i < sides; i++) {
-    const angle = i * step;
+    const angle = i * step + Math.PI / 2;
     vertices.push(Math.cos(angle) * radius, Math.sin(angle) * radius, 0);
   }
 

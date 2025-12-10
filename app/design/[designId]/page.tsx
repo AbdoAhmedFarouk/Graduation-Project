@@ -11,7 +11,7 @@ export default async function page({ params }: { params: Params }) {
   if (!designId) notFound();
 
   return (
-    <div className="h-screen relative overflow-hidden bg-borders">
+    <div className="h-screen relative overflow-hidden ">
       <DeisgnPageWrapper />
       <LeftSidebar />
       <RightSidebar />

@@ -1,82 +1,168 @@
-import * as THREE from "three";
-
-import { useEffect, useRef } from "react";
 import { useThree } from "@react-three/fiber";
-
+import { useEffect, useRef } from "react";
+import * as THREE from "three";
 import { useShallow } from "zustand/shallow";
 
-import GhostPlane from "./GhostPlane";
-import ScreenGrid from "./ScreenGrid";
-
-import { useSceneStore } from "@/app/_store/store";
 import { useGetMousePosition } from "@/app/_hooks/useGetMousePosition";
+import { useSceneStore } from "@/app/_store/store";
+import { GEOMETRIES_TYPE } from "@/app/_validators/sceneGeometries";
+import GhostPlane from "./GhostPlane";
 
-import { GEOMETRIES_TYPE } from "@/app/_validators/deisgnPageGeometries";
+import {
+  EffectComposer,
+  OutlinePass,
+  RenderPass,
+} from "three/examples/jsm/Addons.js";
 
 export default function Scene() {
   const {
     createMode,
     ghostPos,
-    setSelectedObject,
+    desiredShape,
+    sceneObjects,
+    hoveredObjectId,
+
+    setScene,
+    setHoveredObjectId,
+    setSelectedGeometry,
     setGhostPos,
     setCreateMode,
-    desiredShape,
+    sceneObj,
+    setSceneObjects,
   } = useSceneStore(
     useShallow((state) => ({
+      sceneObjects: state.sceneObjects,
+      hoveredObjectId: state.hoveredObjectId,
       createMode: state.createMode,
       ghostPos: state.ghostPos,
       desiredShape: state.desiredShape,
-      setSelectedObject: state.setSelectedObject,
+
+      sceneObj: state.sceneObj,
+      setScene: state.setScene,
+      setHoveredObjectId: state.setHoveredObjectId,
+      setSelectedGeometry: state.setSelectedGeometry,
       setGhostPos: state.setGhostPos,
       setCreateMode: state.setCreateMode,
+      setSceneObjects: state.setSceneObjects,
     }))
   );
+
+  // add scene state in global to get it in the rightside bar
 
   const draggedObject = useRef<THREE.Mesh | null>(null);
   const isDragging = useRef(false);
 
-  const { scene, gl } = useThree();
+  const { scene, gl, camera, size } = useThree();
   const { getPointerPosition, raycaster } = useGetMousePosition();
 
-  const getGridIntersection = (e: MouseEvent) => {
-    getPointerPosition(e);
-    const gridPlane = scene.getObjectByName("gridPlane");
-    if (!gridPlane) return null;
+  const groundPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 0, 1), 0));
 
-    const hits = raycaster.intersectObject(gridPlane);
-    return hits.length ? hits[0].point : null;
+  const composer = useRef<EffectComposer | null>(null);
+  const outlinePass = useRef<OutlinePass | null>(null);
+
+  useEffect(() => {
+    setScene(scene);
+  }, [scene, setScene]);
+
+  useEffect(() => {
+    gl.outputColorSpace = THREE.SRGBColorSpace;
+    gl.toneMapping = THREE.ACESFilmicToneMapping;
+    gl.toneMappingExposure = 1;
+  }, [gl]);
+
+  useEffect(() => {
+    const comp = new EffectComposer(gl);
+    comp.addPass(new RenderPass(scene, camera));
+
+    const outline = new OutlinePass(
+      new THREE.Vector2(size.width, size.height),
+      scene,
+      camera
+    );
+
+    outline.edgeStrength = 5;
+    outline.edgeThickness = 2;
+    outline.edgeGlow = 0.3;
+    outline.visibleEdgeColor.set("#ffffff");
+    outline.hiddenEdgeColor.set("#000000");
+
+    comp.addPass(outline);
+
+    composer.current = comp;
+    outlinePass.current = outline;
+
+    return () => comp.dispose();
+  }, [scene, camera, gl, size]);
+
+  useEffect(() => {
+    gl.setAnimationLoop(() => composer.current?.render());
+    return () => gl.setAnimationLoop(null);
+  }, [gl]);
+
+  useEffect(() => {
+    if (!outlinePass.current) return;
+
+    const mesh = sceneObjects.find((obj) => obj.uuid === hoveredObjectId);
+    outlinePass.current.selectedObjects =
+      mesh instanceof THREE.Mesh ? [mesh] : [];
+  }, [hoveredObjectId, sceneObjects]);
+
+  const getPlaneIntersection = (e: MouseEvent) => {
+    getPointerPosition(e);
+    const point = new THREE.Vector3();
+    const hit = raycaster.ray.intersectPlane(groundPlane.current, point);
+    return hit ? point.clone() : null;
   };
 
   const getSceneIntersection = (e: MouseEvent) => {
     getPointerPosition(e);
-
-    const objects = scene.children.filter(
-      (obj) => obj.name !== "gridPlane" && obj.name !== "ground"
-    );
-
+    const objects = scene.children;
     const hits = raycaster.intersectObjects(objects, true);
     return hits.length ? hits[0].object : null;
+  };
+
+  const onHover = (e: MouseEvent) => {
+    if (!outlinePass.current || isDragging.current) return;
+
+    const hit = getSceneIntersection(e);
+    const currentHoveredId = hoveredObjectId;
+
+    if (hit instanceof THREE.Mesh) {
+      const hitId = hit.uuid;
+
+      if (currentHoveredId !== hitId) {
+        outlinePass.current.selectedObjects = [hit];
+        setHoveredObjectId(hitId);
+      }
+    } else {
+      if (currentHoveredId !== null) {
+        outlinePass.current.selectedObjects = [];
+        setHoveredObjectId(null);
+      }
+    }
   };
 
   const onPointerMove = (e: MouseEvent) => {
     if (!createMode || !desiredShape) return;
 
-    const point = getGridIntersection(e);
-    if (point) setGhostPos(point.clone());
+    const point = getPlaneIntersection(e);
+    if (point) setGhostPos(point);
   };
 
   const onClick = () => {
     if (!createMode || !ghostPos || !desiredShape) return;
 
-    const mesh = new THREE.Mesh(
-      GEOMETRIES_TYPE[desiredShape],
-      new THREE.MeshStandardMaterial({
-        color: "#eeba2c",
-        side: THREE.DoubleSide,
-      })
-    );
+    const geometry = GEOMETRIES_TYPE[desiredShape]();
+    const material = new THREE.MeshStandardMaterial({
+      color: "#eeba2c",
+      side: THREE.DoubleSide,
+    });
 
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.userData.type = geometry.userData.type;
     mesh.position.copy(ghostPos);
+
+    setSceneObjects(mesh);
     scene.add(mesh);
 
     setGhostPos(null);
@@ -92,10 +178,20 @@ export default function Scene() {
     draggedObject.current = hit;
     isDragging.current = true;
 
-    const { material, position, scale, rotation, geometry, visible } = hit;
+    const {
+      uuid,
+      userData,
+      material,
+      position,
+      scale,
+      rotation,
+      geometry,
+      visible,
+    } = hit;
 
-    setSelectedObject({
-      id: hit.uuid,
+    setSelectedGeometry({
+      id: uuid,
+      userData,
       material,
       position,
       scale,
@@ -108,7 +204,7 @@ export default function Scene() {
   const onPointerMoveForDrag = (e: MouseEvent) => {
     if (!isDragging.current || !draggedObject.current) return;
 
-    const point = getGridIntersection(e);
+    const point = getPlaneIntersection(e);
     if (!point) return;
 
     draggedObject.current.position.x = point.x;
@@ -124,6 +220,7 @@ export default function Scene() {
     const dom = gl.domElement;
 
     dom.addEventListener("mousemove", onPointerMove);
+    dom.addEventListener("mousemove", onHover);
     dom.addEventListener("click", onClick);
     dom.addEventListener("pointerdown", onPointerDown);
     dom.addEventListener("pointermove", onPointerMoveForDrag);
@@ -131,6 +228,7 @@ export default function Scene() {
 
     return () => {
       dom.removeEventListener("mousemove", onPointerMove);
+      dom.removeEventListener("mousemove", onHover);
       dom.removeEventListener("click", onClick);
       dom.removeEventListener("pointerdown", onPointerDown);
       dom.removeEventListener("pointermove", onPointerMoveForDrag);
@@ -140,12 +238,6 @@ export default function Scene() {
 
   return (
     <>
-      <mesh name="ground" visible={false}>
-        <planeGeometry args={[200, 200]} />
-        <ScreenGrid />
-        <meshBasicMaterial />
-      </mesh>
-
       {createMode && ghostPos && (
         <GhostPlane desiredShape={desiredShape} position={ghostPos} />
       )}

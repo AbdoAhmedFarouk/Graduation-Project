@@ -2,26 +2,20 @@ import ShapeToolButton from "./ShapeToolButton";
 
 import { useMiddlebarStore, useSceneStore } from "../_store/store";
 
-import { GEOMETRIES_TYPE } from "../_validators/deisgnPageGeometries";
 import {
   Box,
-  Circle,
-  Cone,
-  Cylinder,
-  Gem,
-  Hexagon,
   MessageCircleMore,
   PenTool,
-  Pyramid,
-  Shell,
   Sparkles,
   Square,
-  Star,
-  Tangent,
-  Torus,
-  Triangle,
   Type,
 } from "lucide-react";
+
+import {
+  GEOMETRIES_2D,
+  GEOMETRIES_3D,
+  GEOMETRIES_TYPE,
+} from "../_validators/sceneGeometries";
 
 export default function ShapesButton({
   onClick,
@@ -46,13 +40,7 @@ export default function ShapesButton({
       label: "Rectangle",
       icon: Square,
       dropdown: true,
-      otherShapes: [
-        { geometry: "Rectangle", icon: Square },
-        { geometry: "Ellipse", icon: Circle },
-        { geometry: "Triangle", icon: Triangle },
-        { geometry: "Polygon", icon: Square },
-        { geometry: "Star", icon: Star },
-      ],
+      otherShapes: GEOMETRIES_2D,
       kind: "2d" as const,
     },
     {
@@ -60,18 +48,7 @@ export default function ShapesButton({
       label: "Cube",
       icon: Box,
       dropdown: true,
-      otherShapes: [
-        { geometry: "Cube", icon: Box },
-        { geometry: "Sphere", icon: Circle },
-        { geometry: "Cylinder", icon: Cylinder },
-        { geometry: "Torus", icon: Torus },
-        { geometry: "Helix", icon: Shell },
-        { geometry: "Cone", icon: Cone },
-        { geometry: "Pyramid", icon: Pyramid },
-        { geometry: "Icosahedron", icon: Gem },
-        { geometry: "Dodecahedron", icon: Hexagon },
-        { geometry: "TorusKnot", icon: Tangent },
-      ],
+      otherShapes: GEOMETRIES_3D,
       kind: "3d" as const,
     },
     { id: "text", label: "Text", icon: Type, dropdown: false },

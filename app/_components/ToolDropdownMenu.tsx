@@ -7,7 +7,7 @@ import {
 
 import { useMiddlebarStore } from "../_store/store";
 
-import { GEOMETRIES_TYPE } from "../_validators/deisgnPageGeometries";
+import { GEOMETRIES_TYPE } from "../_validators/sceneGeometries";
 import { ChevronDown, LucideProps } from "lucide-react";
 
 type Props = {

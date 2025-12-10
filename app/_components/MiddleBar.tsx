@@ -2,7 +2,7 @@ import ShapeToolButton from "./ShapeToolButton";
 import ShapesButton from "./ShapesButton";
 import { Button } from "./ui/button";
 
-import { GEOMETRIES_TYPE } from "../_validators/deisgnPageGeometries";
+import { GEOMETRIES_TYPE } from "../_validators/sceneGeometries";
 
 import { AlarmClock, MousePointer2, Play, Plus } from "lucide-react";
 

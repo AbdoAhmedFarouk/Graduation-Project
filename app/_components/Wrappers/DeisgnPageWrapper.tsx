@@ -1,7 +1,7 @@
 "use client";
 
-import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
+import { Canvas } from "@react-three/fiber";
 
 import { useShallow } from "zustand/shallow";
 
@@ -10,7 +10,7 @@ import Scene from "../Scene/Scene";
 
 import { useSceneStore } from "@/app/_store/store";
 
-import { GEOMETRIES_TYPE } from "@/app/_validators/deisgnPageGeometries";
+import { GEOMETRIES_TYPE } from "@/app/_validators/sceneGeometries";
 
 // const AstronautModel = () => {
 //   const gltf = useGLTF("/models/Astronaut-transformed.glb");

@@ -9,7 +9,7 @@ import { Slot } from "@radix-ui/react-slot";
 import ToolDropdownMenu from "./ToolDropdownMenu";
 
 import { cn } from "../_lib/utils";
-import { GEOMETRIES_TYPE } from "../_validators/deisgnPageGeometries";
+import { GEOMETRIES_TYPE } from "../_validators/sceneGeometries";
 
 import { LucideProps } from "lucide-react";
 

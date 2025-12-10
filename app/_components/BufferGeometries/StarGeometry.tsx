@@ -1,8 +1,8 @@
 import * as THREE from "three";
 
 export default function StarGeometry(
-  radius = 1,
-  innerRadius = 0.4,
+  radius = 0.9,
+  innerRadius = 0.35,
   points = 5
 ) {
   const geometry = new THREE.BufferGeometry();
@@ -11,7 +11,7 @@ export default function StarGeometry(
   vertices.push(0, 0, 0);
 
   for (let i = 0; i < points * 2; i++) {
-    const angle = (i * Math.PI) / points - Math.PI / 2;
+    const angle = (i * Math.PI) / points + Math.PI / 2;
     const isOuter = i % 2 === 0;
     const r = isOuter ? radius : innerRadius;
 
