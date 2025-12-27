@@ -1,14 +1,12 @@
 import * as THREE from "three";
 import { forwardRef } from "react";
-
-import { GEOMETRIES_TYPE } from "@/app/_validators/sceneGeometries";
+import { GEOMETRIES_TYPE } from "@/app/_Editor/Creation/sceneGeometries";
 
 type GhostPlaneProps = { position: THREE.Vector3; desiredShape: string };
 
 const GhostPlane = forwardRef(
   ({ position, desiredShape }: GhostPlaneProps, ref) => {
     const geometry = GEOMETRIES_TYPE[desiredShape]?.();
-
 
     if (!geometry) return null;
 

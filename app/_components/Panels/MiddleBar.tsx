@@ -1,10 +1,8 @@
-import ShapeToolButton from "./ShapeToolButton";
-import ShapesButton from "./ShapesButton";
-import { Button } from "./ui/button";
-
-import { GEOMETRIES_TYPE } from "../_validators/sceneGeometries";
-
 import { AlarmClock, MousePointer2, Play, Plus } from "lucide-react";
+import ShapeToolButton from "../Tools/ShapeToolButton";
+import { GEOMETRIES_TYPE } from "@/app/_Editor/Creation/sceneGeometries";
+import { Button } from "../ui/button";
+import ShapesButton from "../Tools/ShapesButton";
 
 export default function MiddleBar({
   onClick,

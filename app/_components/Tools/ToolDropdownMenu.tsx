@@ -5,10 +5,9 @@ import {
   useRef,
 } from "react";
 
-import { useMiddlebarStore } from "../_store/store";
-
-import { GEOMETRIES_TYPE } from "../_validators/sceneGeometries";
 import { ChevronDown, LucideProps } from "lucide-react";
+import { useMiddlebarStore } from "@/app/_store/store";
+import { GEOMETRIES_TYPE } from "@/app/_Editor/Creation/sceneGeometries";
 
 type Props = {
   label: string;

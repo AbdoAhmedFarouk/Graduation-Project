@@ -6,12 +6,10 @@ import {
 } from "react";
 import { Slot } from "@radix-ui/react-slot";
 
-import ToolDropdownMenu from "./ToolDropdownMenu";
-
-import { cn } from "../_lib/utils";
-import { GEOMETRIES_TYPE } from "../_validators/sceneGeometries";
-
 import { LucideProps } from "lucide-react";
+import { GEOMETRIES_TYPE } from "@/app/_Editor/Creation/sceneGeometries";
+import ToolDropdownMenu from "./ToolDropdownMenu";
+import { cn } from "@/app/_lib/utils";
 
 type ShapeToolButtonProps = {
   label?: string;

@@ -1,10 +1,5 @@
 import * as THREE from "three";
 
-import HelixGeometry from "../_components/BufferGeometries/HelixGeometry";
-import PolygonGeometry from "../_components/BufferGeometries/PolygonGeometry";
-import StarGeometry from "../_components/BufferGeometries/StarGeometry";
-import TriangleGeometry from "../_components/BufferGeometries/TriangleGeometry";
-
 import {
   Box,
   Circle,
@@ -21,6 +16,10 @@ import {
   Torus,
   Triangle,
 } from "lucide-react";
+import HelixGeometry from "../BufferGeometries/HelixGeometry";
+import TriangleGeometry from "../BufferGeometries/TriangleGeometry";
+import PolygonGeometry from "../BufferGeometries/PolygonGeometry";
+import StarGeometry from "../BufferGeometries/StarGeometry";
 
 const GEOMETRY_FACTORIES = {
   Rectangle: () => new THREE.PlaneGeometry(1.2, 1.2),

@@ -2,34 +2,33 @@
 
 import { useState } from "react";
 import { useShallow } from "zustand/shallow";
-import { useSceneStore } from "../_store/store";
 
 import { Button } from "@/app/_components/ui/button";
 import { Input } from "@/app/_components/ui/input";
 
 import { ArrowLeft, Menu, Search, Square } from "lucide-react";
-import { cn } from "../_lib/utils";
-import { GEOMETRIES_2D, GEOMETRIES_3D } from "../_validators/sceneGeometries";
+import { useSceneStore } from "@/app/_store/store";
+import {
+  GEOMETRIES_2D,
+  GEOMETRIES_3D,
+} from "@/app/_Editor/Creation/sceneGeometries";
+import { cn } from "@/app/_lib/utils";
 
 export default function LeftSidebar() {
   const [search, setSearch] = useState("");
   const {
-    sceneObj,
     sceneObjects,
     hoveredObjectId,
     setHoveredObjectId,
     setUpdateObjectName,
   } = useSceneStore(
     useShallow((state) => ({
-      sceneObj: state.sceneObj,
       sceneObjects: state.sceneObjects,
       hoveredObjectId: state.hoveredObjectId,
       setHoveredObjectId: state.setHoveredObjectId,
       setUpdateObjectName: state.setUpdateObjectName,
     }))
   );
-
-  // console.log(sceneObj);
 
   const handleGeometryHover = (id: string) => {
     setHoveredObjectId(id);

@@ -1,6 +1,6 @@
 import ShapeToolButton from "./ShapeToolButton";
 
-import { useMiddlebarStore, useSceneStore } from "../_store/store";
+import { useMiddlebarStore, useSceneStore } from "../../_store/store";
 
 import {
   Box,
@@ -10,12 +10,7 @@ import {
   Square,
   Type,
 } from "lucide-react";
-
-import {
-  GEOMETRIES_2D,
-  GEOMETRIES_3D,
-  GEOMETRIES_TYPE,
-} from "../_validators/sceneGeometries";
+import { GEOMETRIES_2D, GEOMETRIES_3D, GEOMETRIES_TYPE } from "@/app/_Editor/Creation/sceneGeometries";
 
 export default function ShapesButton({
   onClick,

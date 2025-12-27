@@ -5,12 +5,12 @@ import { Canvas } from "@react-three/fiber";
 
 import { useShallow } from "zustand/shallow";
 
-import MiddleBar from "../MiddleBar";
-import Scene from "../Scene/Scene";
+// import Scene from "../Scene/Scene";
 
 import { useSceneStore } from "@/app/_store/store";
-
-import { GEOMETRIES_TYPE } from "@/app/_validators/sceneGeometries";
+import { GEOMETRIES_TYPE } from "@/app/_Editor/Creation/sceneGeometries";
+import MiddleBar from "../Panels/MiddleBar";
+import SceneRoot from "@/app/_Editor/Scene/SceneRoot";
 
 // const AstronautModel = () => {
 //   const gltf = useGLTF("/models/Astronaut-transformed.glb");
@@ -78,7 +78,8 @@ export default function DesignPageWrapper() {
 
           {/* <AstronautModel /> */}
 
-          <Scene />
+          {/* <Scene /> */}
+          <SceneRoot />
         </Canvas>
       </div>
 
