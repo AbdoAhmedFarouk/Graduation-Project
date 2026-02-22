@@ -29,8 +29,9 @@ import { useHandlePressEnterKey } from "@/app/_hooks/useHandlePressEnterKey";
 
 import { getSingleMaterial } from "@/app/_lib/utils";
 import { MaterialValue } from "@/app/_types/material";
+import type { LightType } from "@/app/_types/storeTypes";
 
-import { BringToFront, ChevronDown, ChevronUp } from "lucide-react";
+import { BringToFront, ChevronDown, ChevronUp, Lightbulb } from "lucide-react";
 
 const materials = [
   "MeshBasicMaterial",
@@ -67,7 +68,7 @@ type MaterialParams =
   | THREE.MeshPhysicalMaterialParameters;
 
 type MaterialConstructor = new (
-  params?: THREE.MeshStandardMaterialParameters
+  params?: THREE.MeshStandardMaterialParameters,
 ) => THREE.Material;
 
 const MaterialMap: Record<MaterialType, MaterialConstructor> = {
@@ -88,7 +89,7 @@ const axes = ["x", "y", "z"] as const;
 
 const createFreshMaterialParams = (
   type: MaterialType,
-  color: THREE.Color
+  color: THREE.Color,
 ): MaterialParams => {
   const baseCommon = {
     color: color,
@@ -251,6 +252,13 @@ export default function RightSidebar() {
   const [showFogColorPicker, setShowFogColorPicker] = useState<boolean>(false);
   const [isFogSettingActive, setIsFogSettingActive] = useState<boolean>(false);
   const [isFogActive, setIsFogActive] = useState<boolean>(false);
+  // lights
+  const [showLightColorPicker, setShowLightColorPicker] =
+    useState<boolean>(false);
+  const [isLightSettingActive, setIsLightSettingActive] =
+    useState<boolean>(true);
+  const [isLightActive, setIsLightActive] = useState<boolean>(true);
+
   const {
     sceneObj,
     sceneBg,
@@ -258,15 +266,19 @@ export default function RightSidebar() {
     geometryTransformation,
     sceneObjects,
     geometryMaterial,
-    geometryVisibility,
     sceneZoom,
     sceneFog,
+    sceneLights,
 
     setSceneBg,
     setGeometryTransformation,
     setGeometryMaterial,
     setGeometryVisibility,
     setSceneFog,
+
+    addLightToScene,
+    updateLight,
+    removeLight,
   } = useSceneStore(
     useShallow((state) => ({
       sceneObj: state.sceneObj,
@@ -275,34 +287,43 @@ export default function RightSidebar() {
       sceneObjects: state.sceneObjects,
       geometryTransformation: state.geometryTransformation,
       geometryMaterial: state.geometryMaterial,
-      geometryVisibility: state.geometryVisibility,
       sceneFog: state.sceneFog,
       sceneZoom: state.sceneZoom,
+      sceneLights: state.sceneLights,
 
       setSceneBg: state.setSceneBg,
       setGeometryTransformation: state.setGeometryTransformation,
       setGeometryMaterial: state.setGeometryMaterial,
       setGeometryVisibility: state.setGeometryVisibility,
       setSceneFog: state.setSceneFog,
-    }))
+
+      addLightToScene: state.addLightToScene,
+      updateLight: state.updateLight,
+      removeLight: state.removeLight,
+    })),
   );
 
   const sceneColorRef = useRef<HTMLSpanElement>(null);
   const geometryColorRef = useRef<HTMLSpanElement>(null);
   const fogColorRef = useRef<HTMLSpanElement>(null);
+  const lightColorPickerRef = useRef<HTMLSpanElement | null>(null);
 
   const handleChangeColor = useHandleChangeColor();
   const handlePressEnterKey = useHandlePressEnterKey();
   const handleToggle = useToggleState();
+
+  console.log(selectedGeometry);
 
   const applyGeometryTransformation = (
     patch: Partial<{
       pos: { x: number; y: number; z: number };
       rot: { x: number; y: number; z: number };
       scale: { x: number; y: number; z: number };
-    }>
+    }>,
   ) => {
     if (!selectedGeometry) return;
+
+    if (selectedGeometry.userData?.isLocked) return;
 
     if (patch.pos) {
       selectedGeometry.position.set(patch.pos.x, patch.pos.y, patch.pos.z);
@@ -321,7 +342,9 @@ export default function RightSidebar() {
   const handleChangeMaterial = (type: MaterialType) => {
     if (!selectedGeometry) return;
 
-    const mesh = sceneObjects.find((obj) => obj.uuid === selectedGeometry.uuid);
+    const mesh = sceneObjects.find(
+      (obj) => obj.uuid === selectedGeometry.uuid,
+    ) as THREE.Mesh;
     if (!mesh) return;
 
     const oldMaterial = getSingleMaterial(mesh.material);
@@ -347,7 +370,7 @@ export default function RightSidebar() {
     newMaterial.needsUpdate = true;
 
     updateStoreWithMaterial(newMaterial);
-    setGeometryVisibility(true);
+    if (selectedGeometry) setGeometryVisibility(selectedGeometry.uuid, true);
   };
 
   const updateStoreWithMaterial = (material: THREE.Material) => {
@@ -393,7 +416,7 @@ export default function RightSidebar() {
   const applyMaterialProperty = (patch: Record<string, MaterialValue>) => {
     if (!selectedGeometry) return;
 
-    const mat = getSingleMaterial(selectedGeometry.material);
+    const mat = getSingleMaterial((selectedGeometry as THREE.Mesh).material);
     if (!mat) return;
 
     const materialAsRecord = mat as unknown as Record<string, MaterialValue>;
@@ -416,7 +439,7 @@ export default function RightSidebar() {
 
   const handleFogPropertyChange = (
     property: "density" | "near" | "far",
-    value: number
+    value: number,
   ) => {
     setSceneFog({ [property]: value });
   };
@@ -442,7 +465,7 @@ export default function RightSidebar() {
       },
     });
 
-    const mat = getSingleMaterial(selectedGeometry.material);
+    const mat = getSingleMaterial((selectedGeometry as THREE.Mesh).material);
     if (mat) {
       const snapshot = createMaterialSnapshot(mat);
       setGeometryMaterial(snapshot);
@@ -459,17 +482,44 @@ export default function RightSidebar() {
             near: sceneFog.near || 0.1,
             far: sceneFog.far || 20,
           }
-        : { type: "" }
+        : { type: "" },
     );
   }, [isFogActive]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Initialize ambient light when scene is ready
+  useEffect(() => {
+    if (sceneObj && isLightActive && sceneLights.length === 0) {
+      addLightToScene("AmbientLight");
+    }
+  }, [sceneObj, isLightActive]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle light toggle on/off
+  useEffect(() => {
+    if (isLightActive) {
+      if (sceneLights.length === 0) {
+        addLightToScene("AmbientLight");
+      }
+      setIsLightSettingActive(true);
+    } else {
+      sceneLights.forEach((light) => removeLight(light.id));
+      setIsLightSettingActive(false);
+    }
+  }, [isLightActive]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  console.log(sceneObj);
 
   useOutsideClick(showSceneColorPicker, setShowSceneColorPicker, sceneColorRef);
   useOutsideClick(
     showGeometryColorPicker,
     setShowGeometryColorPicker,
-    geometryColorRef
+    geometryColorRef,
   );
   useOutsideClick(showFogColorPicker, setShowFogColorPicker, fogColorRef);
+  useOutsideClick(
+    showLightColorPicker,
+    setShowLightColorPicker,
+    lightColorPickerRef,
+  );
 
   return (
     <div className="absolute flex flex-col text-secondary max-h-[666px] h-full right-5 top-5 bg-surface w-60 rounded-2xl p-3 text-sm cursor-default select-none">
@@ -593,9 +643,9 @@ export default function RightSidebar() {
                   step={0.01}
                   min={0}
                   max={1}
-                  isFogProperty={true}
-                  fogValue={sceneFog.density}
-                  onFogChange={(value) =>
+                  isSpecialProperty={true}
+                  specialPropertyValue={sceneFog.density}
+                  onChange={(value) =>
                     handleFogPropertyChange("density", value)
                   }
                 />
@@ -606,11 +656,9 @@ export default function RightSidebar() {
                     step={0.01}
                     min={0}
                     max={1000}
-                    isFogProperty={true}
-                    fogValue={sceneFog.near}
-                    onFogChange={(value) =>
-                      handleFogPropertyChange("near", value)
-                    }
+                    isSpecialProperty={true}
+                    specialPropertyValue={sceneFog.near}
+                    onChange={(value) => handleFogPropertyChange("near", value)}
                   />
 
                   <InputSlider
@@ -618,11 +666,9 @@ export default function RightSidebar() {
                     step={0.01}
                     min={0}
                     max={1000}
-                    isFogProperty={true}
-                    fogValue={sceneFog.far}
-                    onFogChange={(value) =>
-                      handleFogPropertyChange("far", value)
-                    }
+                    isSpecialProperty={true}
+                    specialPropertyValue={sceneFog.far}
+                    onChange={(value) => handleFogPropertyChange("far", value)}
                   />
                 </>
               )}
@@ -641,7 +687,7 @@ export default function RightSidebar() {
                     color,
                     (color) => setSceneFog({ color }),
                     undefined,
-                    undefined
+                    undefined,
                   )
                 }
                 onBlur={(e) =>
@@ -649,7 +695,7 @@ export default function RightSidebar() {
                     e.target.value,
                     (color) => setSceneFog({ color }),
                     undefined,
-                    undefined
+                    undefined,
                   )
                 }
                 onKeyDown={(e) =>
@@ -657,13 +703,259 @@ export default function RightSidebar() {
                     e,
                     (color) => setSceneFog({ color }),
                     undefined,
-                    undefined
+                    undefined,
                   )
                 }
                 onClick={(e: React.MouseEvent<HTMLSpanElement>) =>
                   handleToggle(showFogColorPicker, setShowFogColorPicker, e)
                 }
               />
+            </>
+          )}
+        </div>
+
+        <hr className="w-full bg-secondary/40 h-[1px] border-0" />
+
+        {/* lights */}
+        <div className="mt-4 pb-3 hover:bg-cards/90 text-xs">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2 flex-1">
+              <span className="bg-borders size-6 rounded-sm flex items-center justify-center">
+                <Lightbulb size={18} />
+              </span>
+
+              <div
+                className="flex items-center gap-2"
+                onClick={() =>
+                  sceneLights.length > 0 &&
+                  handleToggle(isLightSettingActive, setIsLightSettingActive)
+                }
+              >
+                <h3>Lights</h3>
+                {isLightSettingActive ? (
+                  <ChevronUp size={14} />
+                ) : (
+                  <ChevronDown size={14} />
+                )}
+              </div>
+            </div>
+
+            <Switch
+              id="toggle-light"
+              className="data-[state=checked]:bg-hover"
+              checked={isLightActive}
+              onClick={() => handleToggle(isLightActive, setIsLightActive)}
+            />
+          </div>
+
+          {isLightActive && (
+            <div className="mb-3 flex gap-1 flex-wrap">
+              {sceneLights.length === 0 && (
+                <Button
+                  onClick={() => addLightToScene("AmbientLight")}
+                  variant="customVariant"
+                  size="sm"
+                  className="text-xs hover:bg-secondary/20"
+                >
+                  + Ambient
+                </Button>
+              )}
+              <Button
+                onClick={() => addLightToScene("DirectionalLight")}
+                variant="customVariant"
+                size="sm"
+                className="text-xs hover:bg-secondary/20"
+              >
+                + Directional
+              </Button>
+              <Button
+                onClick={() => addLightToScene("PointLight")}
+                variant="customVariant"
+                size="sm"
+                className="text-xs hover:bg-secondary/20"
+              >
+                + Point
+              </Button>
+              <Button
+                onClick={() => addLightToScene("SpotLight")}
+                variant="customVariant"
+                size="sm"
+                className="text-xs hover:bg-secondary/20"
+              >
+                + Spot
+              </Button>
+            </div>
+          )}
+
+          {isLightSettingActive && (
+            <>
+              {sceneLights.map((light) => (
+                <div key={light.id} className="mb-4">
+                  <div className="grid items-center mb-2 grid-cols-8">
+                    <span className="col-span-2">Type</span>
+                    <div className="flex items-center col-span-6 gap-1">
+                      <Select
+                        value={light.type}
+                        onValueChange={(newType) =>
+                          updateLight(light.id, { type: newType as LightType })
+                        }
+                      >
+                        <SelectTrigger size="sm" className="w-full text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value="AmbientLight">
+                              Ambient Light
+                            </SelectItem>
+                            <SelectItem value="DirectionalLight">
+                              Directional Light
+                            </SelectItem>
+                            <SelectItem value="PointLight">
+                              Point Light
+                            </SelectItem>
+                            <SelectItem value="SpotLight">
+                              Spot Light
+                            </SelectItem>
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <CustomColorPicker
+                    label="Color"
+                    pickerClassname="light"
+                    background={light.color}
+                    ref={lightColorPickerRef}
+                    showColorPicker={showLightColorPicker}
+                    onClick={(e) =>
+                      handleToggle(
+                        showLightColorPicker,
+                        setShowLightColorPicker,
+                        e,
+                      )
+                    }
+                    onColorPickerChange={(color) =>
+                      updateLight(light.id, {
+                        color: color.replace("#", ""),
+                      })
+                    }
+                    onInputChange={(value) =>
+                      updateLight(light.id, {
+                        color: value.replace("#", ""),
+                      })
+                    }
+                    onBlur={(e) =>
+                      updateLight(light.id, {
+                        color: e.target.value.replace("#", ""),
+                      })
+                    }
+                    onKeyDown={(e) =>
+                      handlePressEnterKey(
+                        e,
+                        (color) => updateLight(light.id, { color }),
+                        undefined,
+                        undefined,
+                      )
+                    }
+                  />
+
+                  <InputSlider
+                    label="Intensity"
+                    min={0}
+                    max={
+                      light.type === "PointLight" || light.type === "SpotLight"
+                        ? 250
+                        : 10
+                    }
+                    step={0.1}
+                    isSpecialProperty={true}
+                    specialPropertyValue={light.intensity}
+                    onChange={(value) =>
+                      updateLight(light.id, {
+                        intensity: value,
+                      })
+                    }
+                  />
+
+                  {light.type !== "AmbientLight" && (
+                    <div className="grid items-center mb-2 grid-cols-8">
+                      <span className="col-span-2">Position</span>
+                      <div className="flex items-center col-span-6 gap-1">
+                        {axes.map((axis) => (
+                          <div key={axis} className="relative h-full">
+                            <Input
+                              type="number"
+                              className="h-6 py-1 px-3.5 rounded-sm md:text-xs border-0 bg-borders focus-visible:ring-0 focus-visible:border selection:bg-hover/50"
+                              value={(light.position?.[axis] ?? 0).toFixed(2)}
+                              step={0.5}
+                              onChange={(e) =>
+                                updateLight(light.id, {
+                                  position: {
+                                    x:
+                                      axis === "x"
+                                        ? Number(e.target.value || 0)
+                                        : (light.position?.x ?? 0),
+                                    y:
+                                      axis === "y"
+                                        ? Number(e.target.value || 0)
+                                        : (light.position?.y ?? 0),
+                                    z:
+                                      axis === "z"
+                                        ? Number(e.target.value || 0)
+                                        : (light.position?.z ?? 0),
+                                  },
+                                })
+                              }
+                            />
+                            <span className="absolute left-0 top-1/2 ps-1 -translate-y-1/2 uppercase">
+                              {axis}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {light.type === "PointLight" && (
+                    <InputSlider
+                      label="Distance"
+                      min={1}
+                      max={500}
+                      step={1}
+                      isSpecialProperty={true}
+                      specialPropertyValue={light.distance ?? 100}
+                      onChange={(value) =>
+                        updateLight(light.id, { distance: value })
+                      }
+                    />
+                  )}
+
+                  {light.type === "SpotLight" && (
+                    <InputSlider
+                      label="Angle"
+                      min={0}
+                      max={Math.PI}
+                      step={0.05}
+                      isSpecialProperty={true}
+                      specialPropertyValue={light.angle ?? Math.PI / 4}
+                      onChange={(value) =>
+                        updateLight(light.id, { angle: value })
+                      }
+                    />
+                  )}
+
+                  <Button
+                    onClick={() => removeLight(light.id)}
+                    variant="customVariant"
+                    size="sm"
+                    className="text-xs hover:bg-destructive/20 text-destructive w-full"
+                  >
+                    Remove Light
+                  </Button>
+                </div>
+              ))}
             </>
           )}
         </div>
@@ -685,10 +977,17 @@ export default function RightSidebar() {
                       <div key={axis} className="relative h-full">
                         <Input
                           type="number"
-                          className="h-6 py-1 px-3.5 rounded-sm md:text-xs border-0 bg-borders focus-visible:ring-0 focus-visible:border selection:bg-hover/50"
+                          disabled={selectedGeometry?.userData?.isLocked}
+                          className={
+                            "h-6 py-1 px-3.5 rounded-sm md:text-xs border-0 bg-borders focus-visible:ring-0 focus-visible:border selection:bg-hover/50" +
+                            (selectedGeometry?.userData?.isLocked
+                              ? " pointer-events-none select-none opacity-60"
+                              : "")
+                          }
                           value={geometryTransformation[transform.stateKey][
                             axis
                           ].toFixed(2)}
+                          step={0.01}
                           onChange={(e) =>
                             applyGeometryTransformation({
                               [transform.funcKey]: {
@@ -748,7 +1047,7 @@ export default function RightSidebar() {
                     handleToggle(
                       showGeometryColorPicker,
                       setShowGeometryColorPicker,
-                      e
+                      e,
                     )
                   }
                   onKeyDown={(e) =>
@@ -756,7 +1055,7 @@ export default function RightSidebar() {
                       e,
                       (color) => setGeometryMaterial({ color }),
                       undefined,
-                      selectedGeometry?.material
+                      (selectedGeometry as THREE.Mesh).material,
                     )
                   }
                   onBlur={(e) =>
@@ -764,7 +1063,7 @@ export default function RightSidebar() {
                       e.target.value,
                       (color) => setGeometryMaterial({ color }),
                       undefined,
-                      selectedGeometry?.material
+                      (selectedGeometry as THREE.Mesh).material,
                     )
                   }
                   onInputChange={(value) =>
@@ -775,7 +1074,7 @@ export default function RightSidebar() {
                       color,
                       (color) => setGeometryMaterial({ color }),
                       undefined,
-                      selectedGeometry?.material
+                      (selectedGeometry as THREE.Mesh).material,
                     )
                   }
                   ref={geometryColorRef}
@@ -785,7 +1084,7 @@ export default function RightSidebar() {
 
                 {materialSliderConfig
                   .filter((config) =>
-                    config.types.includes(geometryMaterial.type as string)
+                    config.types.includes(geometryMaterial.type as string),
                   )
                   .map((config) => (
                     <InputSlider
@@ -825,7 +1124,7 @@ export default function RightSidebar() {
                   </div>
                 )}
 
-                {"wireframe" in selectedGeometry.material && (
+                {"wireframe" in (selectedGeometry as THREE.Mesh).material && (
                   <div className="flex items-center gap-2 text-xs mb-2">
                     <Checkbox
                       id="wirframe"
@@ -843,206 +1142,20 @@ export default function RightSidebar() {
                 <div className="flex items-center gap-2 text-xs">
                   <Checkbox
                     id="visible"
-                    checked={!!geometryVisibility}
-                    onCheckedChange={(checked) =>
-                      setGeometryVisibility(!!checked)
-                    }
+                    checked={!!selectedGeometry?.visible}
+                    onCheckedChange={(checked) => {
+                      if (!selectedGeometry) return;
+                      setGeometryVisibility(selectedGeometry.uuid, !!checked);
+                    }}
                   />
                   <Label htmlFor="visible">Visible</Label>
                 </div>
               </div>
             </div>
+
+            <hr className="w-full bg-secondary/40 h-[1px] border-0" />
           </>
         )}
-
-        {/* <hr className="w-full bg-secondary/40 h-[1px] border-0" />
-
-        <div className="mt-4 pb-3 hover:bg-cards/90">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 flex-1">
-              <span className="bg-borders size-6 rounded-sm flex items-center justify-center">
-                <Lightbulb size={18} />
-              </span>
-              <h3>Light</h3>
-            </div>
-
-            <span>
-              <ChevronDown size={14} />
-            </span>
-          </div>
-
-          <div>
-            <div className="grid items-center gap-5 mb-2 grid-cols-7">
-              <span className="col-span-2">Ambient</span>
-              <div className="flex items-center col-span-5 gap-1">
-                <Button
-                  size="sm"
-                  variant="customVariant"
-                  className="bg-gold/80 h-6"
-                >
-                  Yes
-                </Button>
-                <Button size="sm" variant="customVariant" className="h-6">
-                  No
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid items-center gap-5 mb-2 grid-cols-7">
-              <span className="col-span-2">Color</span>
-              <div className="col-span-5 items-center flex gap-1">
-                <span className="bg-gold size-6 rounded-sm" />
-
-                <Input
-                  type="text"
-                  className="h-6 rounded-sm text-xs border-0 bg-borders p-1 focus-visible:ring-[1px] selection:bg-hover/50"
-                />
-              </div>
-            </div>
-
-            <div className="grid items-center gap-5 mb-2 grid-cols-7">
-              <span className="col-span-2">Intensity</span>
-              <div className="col-span-5 items-center flex gap-1">
-                <Input
-                  type="text"
-                  className="h-6 rounded-sm w-10 text-xs border-0 bg-borders p-1 focus-visible:ring-[1px] selection:bg-hover/50"
-                />
-                <Slider
-                  defaultValue={[50]}
-                  max={100}
-                  step={1}
-                  className="bg-borders h-6 border-0 rounded-sm"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <hr className="w-full bg-secondary/40 h-[1px] border-0" />
-
-        <div className="mt-4 pb-3 hover:bg-cards/90">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 flex-1">
-              <span className="bg-borders size-6 rounded-sm flex items-center justify-center">
-                <Lightbulb size={18} />
-              </span>
-              <h3>Light</h3>
-            </div>
-
-            <span>
-              <ChevronDown size={14} />
-            </span>
-          </div>
-
-          <div>
-            <div className="grid items-center gap-5 mb-2 grid-cols-7">
-              <span className="col-span-2">Ambient</span>
-              <div className="flex items-center col-span-5 gap-1">
-                <Button
-                  size="sm"
-                  variant="customVariant"
-                  className="bg-gold/80 h-6"
-                >
-                  Yes
-                </Button>
-                <Button size="sm" variant="customVariant" className="h-6">
-                  No
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid items-center gap-5 mb-2 grid-cols-7">
-              <span className="col-span-2">Color</span>
-              <div className="col-span-5 items-center flex gap-1">
-                <span className="bg-gold size-6 rounded-sm" />
-
-                <Input
-                  type="text"
-                  className="h-6 rounded-sm text-xs border-0 bg-borders p-1 focus-visible:ring-[1px] selection:bg-hover/50"
-                />
-              </div>
-            </div>
-
-            <div className="grid items-center gap-5 mb-2 grid-cols-7">
-              <span className="col-span-2">Intensity</span>
-              <div className="col-span-5 items-center flex gap-1">
-                <Input
-                  type="text"
-                  className="h-6 rounded-sm w-10 text-xs border-0 bg-borders p-1 focus-visible:ring-[1px] selection:bg-hover/50"
-                />
-                <Slider
-                  defaultValue={[50]}
-                  max={100}
-                  step={1}
-                  className="bg-borders h-6 border-0 rounded-sm"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <hr className="w-full bg-secondary/40 h-[1px] border-0" />
-
-        <div className="mt-4 pb-3 hover:bg-cards/90">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 flex-1">
-              <span className="bg-borders size-6 rounded-sm flex items-center justify-center">
-                <Lightbulb size={18} />
-              </span>
-              <h3>Light</h3>
-            </div>
-
-            <span>
-              <ChevronDown size={14} />
-            </span>
-          </div>
-
-          <div>
-            <div className="grid items-center gap-5 mb-2 grid-cols-7">
-              <span className="col-span-2">Ambient</span>
-              <div className="flex items-center col-span-5 gap-1">
-                <Button
-                  size="sm"
-                  variant="customVariant"
-                  className="bg-gold/80 h-6"
-                >
-                  Yes
-                </Button>
-                <Button size="sm" variant="customVariant" className="h-6">
-                  No
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid items-center gap-5 mb-2 grid-cols-7">
-              <span className="col-span-2">Color</span>
-              <div className="col-span-5 items-center flex gap-1">
-                <span className="bg-gold size-6 rounded-sm" />
-
-                <Input
-                  type="text"
-                  className="h-6 rounded-sm text-xs border-0 bg-borders p-1 focus-visible:ring-[1px] selection:bg-hover/50"
-                />
-              </div>
-            </div>
-
-            <div className="grid items-center gap-5 mb-2 grid-cols-7">
-              <span className="col-span-2">Intensity</span>
-              <div className="col-span-5 items-center flex gap-1">
-                <Input
-                  type="text"
-                  className="h-6 rounded-sm w-10 text-xs border-0 bg-borders p-1 focus-visible:ring-[1px] selection:bg-hover/50"
-                />
-                <Slider
-                  defaultValue={[50]}
-                  max={100}
-                  step={1}
-                  className="bg-borders h-6 border-0 rounded-sm"
-                />
-              </div>
-            </div>
-          </div>
-        </div> */}
       </div>
     </div>
   );

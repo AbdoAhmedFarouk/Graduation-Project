@@ -1,10 +1,9 @@
 import { useEffect } from "react";
-import { useThree } from "@react-three/fiber";
 
-type Params = {
-  onPointerMove?: (e: MouseEvent) => void;
-  onPointerDown?: (e: MouseEvent) => void;
-  onPointerUp?: (e: MouseEvent) => void;
+type SceneEventsParams = {
+  onPointerMove?: (e: PointerEvent) => void;
+  onPointerDown?: (e: PointerEvent) => void;
+  onPointerUp?: () => void;
   onClick?: (e: MouseEvent) => void;
 };
 
@@ -13,22 +12,20 @@ export function useSceneEvents({
   onPointerDown,
   onPointerUp,
   onClick,
-}: Params) {
-  const { gl } = useThree();
-
+}: SceneEventsParams) {
   useEffect(() => {
-    const dom = gl.domElement;
-
-    if (onPointerMove) dom.addEventListener("pointermove", onPointerMove);
-    if (onPointerDown) dom.addEventListener("pointerdown", onPointerDown);
-    if (onPointerUp) dom.addEventListener("pointerup", onPointerUp);
-    if (onClick) dom.addEventListener("click", onClick);
+    if (onPointerMove) window.addEventListener("pointermove", onPointerMove);
+    if (onPointerDown) window.addEventListener("pointerdown", onPointerDown);
+    if (onPointerUp) window.addEventListener("pointerup", onPointerUp);
+    if (onClick) window.addEventListener("click", onClick);
 
     return () => {
-      if (onPointerMove) dom.removeEventListener("pointermove", onPointerMove);
-      if (onPointerDown) dom.removeEventListener("pointerdown", onPointerDown);
-      if (onPointerUp) dom.removeEventListener("pointerup", onPointerUp);
-      if (onClick) dom.removeEventListener("click", onClick);
+      if (onPointerMove)
+        window.removeEventListener("pointermove", onPointerMove);
+      if (onPointerDown)
+        window.removeEventListener("pointerdown", onPointerDown);
+      if (onPointerUp) window.removeEventListener("pointerup", onPointerUp);
+      if (onClick) window.removeEventListener("click", onClick);
     };
-  });
+  }, [onPointerMove, onPointerDown, onPointerUp, onClick]);
 }

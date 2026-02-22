@@ -1,7 +1,23 @@
 import * as THREE from "three";
 import { GEOMETRIES_TYPE } from "../_Editor/Creation/sceneGeometries";
 
-type SceneGeometry = THREE.Mesh;
+type SceneGeometry = THREE.Mesh | THREE.Object3D;
+
+export type LightType =
+  | "PointLight"
+  | "DirectionalLight"
+  | "SpotLight"
+  | "AmbientLight";
+
+interface SceneLight {
+  id: string;
+  type: LightType;
+  color: string;
+  intensity: number;
+  position?: { x: number; y: number; z: number };
+  distance?: number;
+  angle?: number;
+}
 
 export type SceneState = {
   sceneObj: THREE.Scene | null;
@@ -24,7 +40,6 @@ export type SceneState = {
     color: string;
     props: Record<string, string | number | boolean | undefined>;
   };
-  geometryVisibility: boolean;
   sceneFog: {
     type: string;
     color: string;
@@ -33,11 +48,12 @@ export type SceneState = {
     far: number;
   };
   sceneZoom: number;
+  sceneLights: SceneLight[];
 
   updateSceneZoom: (zoom: number) => void;
   setScene: (scene: THREE.Scene) => void;
   setSceneObjects: (obj: SceneGeometry) => void;
-  setSelectedGeometry: (obj: SceneGeometry) => void;
+  setSelectedGeometry: (obj: SceneGeometry | null) => void;
   setGhostPos: (pos: THREE.Vector3 | null) => void;
   setCreateMode: (state: boolean) => void;
   setDesiredShape: (shape: keyof typeof GEOMETRIES_TYPE | "") => void;
@@ -56,9 +72,10 @@ export type SceneState = {
       type: string | undefined;
       color: string;
       props: Record<string, string | number | boolean | undefined>;
-    }>
+    }>,
   ) => void;
-  setGeometryVisibility: (visible: boolean) => void;
+  setGeometryVisibility: (objId: string, isVisible: boolean) => void;
+  setGeometryLocked: (objId: string, isLocked: boolean) => void;
   setSceneFog: (patch: {
     type?: "" | "Fog" | "FogExp2";
     color?: string;
@@ -66,6 +83,11 @@ export type SceneState = {
     near?: number;
     far?: number;
   }) => void;
+
+  // lights
+  addLightToScene: (type?: LightType) => void;
+  updateLight: (id: string, patch: Partial<SceneLight>) => void;
+  removeLight: (id: string) => void;
 };
 
 export type MiddlebarState = {

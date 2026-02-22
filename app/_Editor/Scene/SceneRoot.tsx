@@ -1,5 +1,6 @@
 "use client";
 
+import * as THREE from "three";
 import { useThree } from "@react-three/fiber";
 import { useEffect } from "react";
 import { useShallow } from "zustand/shallow";
@@ -18,25 +19,30 @@ import { useSceneEvents } from "./useSceneEvents";
 import { useCameraZoom } from "../Interaction/useCameraZoom";
 
 export default function SceneRoot() {
-  const { scene } = useThree();
+  const { scene, gl } = useThree();
 
   const {
+    sceneObj,
     sceneObjects,
     createMode,
     ghostPos,
     desiredShape,
     hoveredObjectId,
+    selectedGeometry,
     setScene,
   } = useSceneStore(
     useShallow((s) => ({
+      sceneObj: s.sceneObj,
       sceneObjects: s.sceneObjects,
       createMode: s.createMode,
       ghostPos: s.ghostPos,
       desiredShape: s.desiredShape,
       hoveredObjectId: s.hoveredObjectId,
+      selectedGeometry: s.selectedGeometry,
       setScene: s.setScene,
-    }))
+    })),
   );
+
   const create = useCreateOnClick(scene);
 
   useCameraZoom();
@@ -45,18 +51,17 @@ export default function SceneRoot() {
     setScene(scene);
   }, [scene, setScene]);
 
-  usePostprocessing({ scene, sceneObjects, hoveredObjectId });
-
   const raycaster = useRaycaster();
 
   const hover = useHoverDetection({
     intersectObjects: raycaster.intersectObjects,
-    sceneObjects,
+    sceneObjects: sceneObjects!,
   });
 
   const selection = useSelection({
+    domElement: gl.domElement,
     intersectObjects: raycaster.intersectObjects,
-    sceneObjects,
+    sceneObjects: sceneObj?.children ?? [],
   });
 
   const drag = useDragTransform({
@@ -75,20 +80,27 @@ export default function SceneRoot() {
       ghost.onPointerMove();
       hover.onPointerMove();
     },
-
     onPointerDown: (e) => {
       raycaster.updateFromEvent(e);
 
       if (createMode) return;
 
-      const hits = raycaster.intersectObjects(sceneObjects);
-      selection.onPointerDown();
+      const children = (sceneObj?.children ?? []) as THREE.Object3D[];
+      const hits = raycaster.intersectObjects(children);
+      selection.onPointerDown(e as PointerEvent);
       drag.onPointerDown(hits[0]?.object ?? null);
     },
-
     onPointerUp: drag.onPointerUp,
-
     onClick: create.onClick,
+  });
+
+  const hoveredObject =
+    sceneObjects.find((o) => o!.uuid === hoveredObjectId) ?? null;
+
+  usePostprocessing({
+    scene,
+    hoveredObject,
+    selectedObject: selectedGeometry,
   });
 
   return (

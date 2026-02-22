@@ -19,13 +19,14 @@ export function useCreateOnClick(scene: THREE.Scene) {
       setCreateMode: s.setCreateMode,
       setGhostPos: s.setGhostPos,
       setSceneObjects: s.setSceneObjects,
-    }))
+    })),
   );
 
   const onClick = () => {
     if (!createMode || !ghostPos || !desiredShape) return;
 
     const geometry = GEOMETRIES_TYPE[desiredShape]();
+
     const material = new THREE.MeshBasicMaterial({
       color: "#eeba2c",
       side: THREE.DoubleSide,
@@ -34,6 +35,7 @@ export function useCreateOnClick(scene: THREE.Scene) {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.userData.type = geometry.userData.type;
     mesh.position.copy(ghostPos);
+    // mesh.add(light);
 
     scene.add(mesh);
     setSceneObjects(mesh);

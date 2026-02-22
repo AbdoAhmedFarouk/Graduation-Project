@@ -1,7 +1,7 @@
+// usePostprocessing.ts
 import * as THREE from "three";
 import { useEffect, useRef } from "react";
-import { useThree } from "@react-three/fiber";
-
+import { useThree, useFrame } from "@react-three/fiber";
 import {
   EffectComposer,
   RenderPass,
@@ -10,55 +10,69 @@ import {
 
 type Params = {
   scene: THREE.Scene;
-  sceneObjects: THREE.Object3D[];
-  hoveredObjectId: string | null;
+  hoveredObject: THREE.Object3D | null;
+  selectedObject: THREE.Object3D | null;
 };
 
 export function usePostprocessing({
   scene,
-  sceneObjects,
-  hoveredObjectId,
+  hoveredObject,
+  selectedObject,
 }: Params) {
   const { gl, camera, size } = useThree();
 
   const composer = useRef<EffectComposer | null>(null);
-  const outlinePass = useRef<OutlinePass | null>(null);
+  const hoverPass = useRef<OutlinePass | null>(null);
+  const selectionPass = useRef<OutlinePass | null>(null);
 
   useEffect(() => {
     const comp = new EffectComposer(gl);
     comp.addPass(new RenderPass(scene, camera));
 
-    const outline = new OutlinePass(
+    const hoverOutline = new OutlinePass(
       new THREE.Vector2(size.width, size.height),
       scene,
-      camera
+      camera,
     );
+    hoverOutline.edgeStrength = 5;
+    hoverOutline.visibleEdgeColor.set("#fff");
 
-    outline.edgeStrength = 5;
-    outline.edgeThickness = 2;
-    outline.edgeGlow = 0.3;
-    outline.visibleEdgeColor.set("#ffffff");
-    outline.hiddenEdgeColor.set("#000000");
+    const selectionOutline = new OutlinePass(
+      new THREE.Vector2(size.width, size.height),
+      scene,
+      camera,
+    );
+    selectionOutline.edgeStrength = 100;
+    selectionOutline.visibleEdgeColor.set("#fff");
 
-    comp.addPass(outline);
+    comp.addPass(hoverOutline);
+    comp.addPass(selectionOutline);
 
     composer.current = comp;
-    outlinePass.current = outline;
+    hoverPass.current = hoverOutline;
+    selectionPass.current = selectionOutline;
 
-    return () => comp.dispose();
+    return () => {
+      comp.dispose();
+    };
   }, [scene, camera, gl, size]);
 
-  useEffect(() => {
-    gl.setAnimationLoop(() => composer.current?.render());
-    return () => gl.setAnimationLoop(null);
-  }, [gl]);
+  useFrame(() => {
+    composer.current?.render();
+  }, 1);
 
   useEffect(() => {
-    if (!outlinePass.current) return;
+    if (!hoverPass.current) return;
 
-    const mesh = sceneObjects.find((o) => o.uuid === hoveredObjectId);
+    hoverPass.current.selectedObjects =
+      hoveredObject && hoveredObject !== selectedObject ? [hoveredObject] : [];
+  }, [hoveredObject, selectedObject]);
 
-    outlinePass.current.selectedObjects =
-      mesh instanceof THREE.Mesh ? [mesh] : [];
-  }, [hoveredObjectId, sceneObjects]);
+  useEffect(() => {
+    if (!selectionPass.current) return;
+
+    selectionPass.current.selectedObjects = selectedObject
+      ? [selectedObject]
+      : [];
+  }, [selectedObject]);
 }

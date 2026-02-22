@@ -5,22 +5,37 @@ import { useSceneStore } from "@/app/_store/store";
 type Params = {
   intersectPlane: (
     plane: THREE.Plane,
-    target?: THREE.Vector3
+    target?: THREE.Vector3,
   ) => THREE.Vector3 | null;
 };
 
 export function useDragTransform({ intersectPlane }: Params) {
-  const dragged = useRef<THREE.Mesh | null>(null);
-  const plane = useRef(new THREE.Plane(new THREE.Vector3(0, 0, 1), 0));
-
   const setGeometryTransformation = useSceneStore(
-    (s) => s.setGeometryTransformation
+    (s) => s.setGeometryTransformation,
   );
 
+  const dragged = useRef<{
+    object: THREE.Object3D;
+    offset: THREE.Vector3;
+  } | null>(null);
+  const plane = useRef(new THREE.Plane(new THREE.Vector3(0, 0, 1), 0));
+
   const onPointerDown = (hit: THREE.Object3D | null) => {
-    if (hit instanceof THREE.Mesh) {
-      dragged.current = hit;
-    }
+    if (!hit) return;
+
+    if (hit.userData.isLocked) return;
+
+    const point = intersectPlane(plane.current);
+    if (!point) return;
+
+    const worldPos = new THREE.Vector3();
+    hit.getWorldPosition(worldPos);
+
+    const offset = new THREE.Vector3().subVectors(worldPos, point);
+    dragged.current = {
+      object: hit,
+      offset: offset,
+    };
   };
 
   const onPointerMove = () => {
@@ -29,13 +44,18 @@ export function useDragTransform({ intersectPlane }: Params) {
     const point = intersectPlane(plane.current);
     if (!point) return;
 
-    dragged.current.position.set(point.x, point.y, dragged.current.position.z);
+    const targetPos = point.clone().add(dragged.current.offset);
+    dragged.current.object.position.set(
+      targetPos.x,
+      targetPos.y,
+      dragged.current.object.position.z,
+    );
 
     setGeometryTransformation({
       position: {
-        x: point.x,
-        y: point.y,
-        z: dragged.current.position.z,
+        x: targetPos.x,
+        y: targetPos.y,
+        z: dragged.current.object.position.z,
       },
     });
   };

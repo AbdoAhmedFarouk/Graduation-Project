@@ -11,9 +11,9 @@ export default function InputSlider({
   step = 0.01,
   geometryMaterial,
   applyMaterialProperty,
-  isFogProperty = false,
-  fogValue,
-  onFogChange,
+  isSpecialProperty = false,
+  specialPropertyValue,
+  onChange,
 }: {
   label: string;
   prop?: string;
@@ -23,20 +23,20 @@ export default function InputSlider({
   geometryMaterial?: MaterialProps;
   applyMaterialProperty?: (patch: Record<string, MaterialValue>) => void;
 
-  isFogProperty?: boolean;
-  fogValue?: number;
-  onFogChange?: (value: number) => void;
+  isSpecialProperty?: boolean;
+  specialPropertyValue?: number;
+  onChange?: (value: number) => void;
 }) {
-  const currentValue = isFogProperty
-    ? fogValue ?? 0
-    : (geometryMaterial?.props[prop as string] as number) ?? 0;
+  const currentValue = isSpecialProperty
+    ? (specialPropertyValue ?? 0)
+    : ((geometryMaterial?.props[prop as string] as number) ?? 0);
 
   const handleUpdate = (val: number) => {
     const safeValue = isNaN(val) ? 0 : Math.min(Math.max(val, min), max);
 
-    if (isFogProperty) {
-      if (onFogChange) {
-        onFogChange(safeValue);
+    if (isSpecialProperty) {
+      if (onChange) {
+        onChange(safeValue);
       }
     } else {
       if (applyMaterialProperty) {
