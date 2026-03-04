@@ -276,7 +276,6 @@ export default function RightSidebar() {
     addLightToScene,
     updateLight,
     removeLight,
-    setIsTransformControlsActive,
   } = useSceneStore(
     useShallow((state) => ({
       sceneObj: state.sceneObj,
@@ -296,7 +295,6 @@ export default function RightSidebar() {
       addLightToScene: state.addLightToScene,
       updateLight: state.updateLight,
       removeLight: state.removeLight,
-      setIsTransformControlsActive: state.setIsTransformControlsActive,
     })),
   );
 

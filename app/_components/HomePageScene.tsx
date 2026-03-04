@@ -137,7 +137,7 @@ export default function HomePageScene() {
     "#eeba2c",
   ];
 
-  const shapes = Array.from({ length: 35 }, (_, i) => {
+  const shapes = Array.from({ length: 35 }, () => {
     const radius = 5 + Math.random() * 5;
     const theta = Math.random() * Math.PI * 2;
     const phi = Math.acos(2 * Math.random() - 1);
