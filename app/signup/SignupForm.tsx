@@ -1,24 +1,24 @@
 "use client";
 
-import { useActionState } from "react";
+// import { useActionState } from "react";
 
 import ShowPasswordInp from "../_components/ShowPasswordInp";
 import SubmitBtn from "../_components/SubmitBtn";
 
 import FormRow from "../_components/FormRow";
-import { signup } from "../_lib/actions";
+// import { signup } from "../_lib/actions";
 
-const initialState = {
-  success: false,
-  message: "",
-};
+// const initialState = {
+//   success: false,
+//   message: "",
+// };
 
 export default function SignupForm() {
-  const [formState, formAction] = useActionState(signup, initialState);
+  // const [formState, formAction] = useActionState(signup, initialState);
 
   return (
     <form
-      action={formAction}
+      // action={formAction}
       className="w-full max-w-xs sm:max-w-sm md:max-w-md space-y-4 border border-borders p-8 rounded-2xl shadow-[0_0_10px]
       shadow-secondary/10"
     >
@@ -58,9 +58,9 @@ export default function SignupForm() {
         </div>
       </FormRow>
 
-      {formState.message && (
+      {/* {formState.message && (
         <p className="text-red-600 mb-5">{formState.message}</p>
-      )}
+      )} */}
 
       <SubmitBtn text="Sign up" loadingText="Signing up..." />
     </form>

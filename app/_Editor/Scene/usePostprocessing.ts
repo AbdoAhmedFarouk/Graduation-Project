@@ -1,4 +1,3 @@
-// usePostprocessing.ts
 import * as THREE from "three";
 import { useEffect, useRef } from "react";
 import { useThree, useFrame } from "@react-three/fiber";

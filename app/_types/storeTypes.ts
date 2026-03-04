@@ -49,6 +49,7 @@ export type SceneState = {
   };
   sceneZoom: number;
   sceneLights: SceneLight[];
+  isTransformControlsActive: boolean;
 
   updateSceneZoom: (zoom: number) => void;
   setScene: (scene: THREE.Scene) => void;
@@ -83,11 +84,10 @@ export type SceneState = {
     near?: number;
     far?: number;
   }) => void;
-
-  // lights
   addLightToScene: (type?: LightType) => void;
   updateLight: (id: string, patch: Partial<SceneLight>) => void;
   removeLight: (id: string) => void;
+  setIsTransformControlsActive: (isActive: boolean) => void;
 };
 
 export type MiddlebarState = {

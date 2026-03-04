@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { useRef } from "react";
 import { useSceneStore } from "@/app/_store/store";
+import { useShallow } from "zustand/shallow";
 
 type Params = {
   intersectPlane: (
@@ -10,9 +11,13 @@ type Params = {
 };
 
 export function useDragTransform({ intersectPlane }: Params) {
-  const setGeometryTransformation = useSceneStore(
-    (s) => s.setGeometryTransformation,
-  );
+  const { isTransformControlsActive, setGeometryTransformation } =
+    useSceneStore(
+      useShallow((s) => ({
+        setGeometryTransformation: s.setGeometryTransformation,
+        isTransformControlsActive: s.isTransformControlsActive,
+      })),
+    );
 
   const dragged = useRef<{
     object: THREE.Object3D;
@@ -21,9 +26,7 @@ export function useDragTransform({ intersectPlane }: Params) {
   const plane = useRef(new THREE.Plane(new THREE.Vector3(0, 0, 1), 0));
 
   const onPointerDown = (hit: THREE.Object3D | null) => {
-    if (!hit) return;
-
-    if (hit.userData.isLocked) return;
+    if (!hit || isTransformControlsActive || hit.userData.isLocked) return;
 
     const point = intersectPlane(plane.current);
     if (!point) return;

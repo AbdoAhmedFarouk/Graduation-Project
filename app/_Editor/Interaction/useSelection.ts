@@ -21,25 +21,26 @@ export function useSelection({
 }: Params) {
   const selectedGeometry = useSceneStore((s) => s.selectedGeometry);
   const setSelectedGeometry = useSceneStore((s) => s.setSelectedGeometry);
+  const isTransforming = useSceneStore((s) => s.isTransformControlsActive);
 
   const onPointerDown = (event: PointerEvent) => {
-    if (event.target !== domElement) return;
+    if (event.target !== domElement || isTransforming) return;
 
     const hits = intersectObjects(sceneObjects).filter((h) => {
       const obj = h.object as THREE.Object3D & { userData?: ObjectUserData };
-      if (obj.visible === false) return false;
-      if (obj.userData && obj.userData.isVisible === false) return false;
-      return true;
+      return obj.visible && obj.userData?.isVisible !== false;
     });
+
     const hit = hits[0]?.object;
 
     if (hit instanceof THREE.Mesh) {
       if (selectedGeometry?.uuid !== hit.uuid) {
         setSelectedGeometry(hit);
       }
-    } else {
-      setSelectedGeometry(null);
+      return;
     }
+
+    setSelectedGeometry(null);
   };
 
   return { onPointerDown };

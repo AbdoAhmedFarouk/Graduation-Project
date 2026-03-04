@@ -1,13 +1,13 @@
 "use client";
 
 import * as THREE from "three";
-import { useThree } from "@react-three/fiber";
 import { useEffect } from "react";
-import { useShallow } from "zustand/shallow";
+import { useThree } from "@react-three/fiber";
+import { TransformControls } from "@react-three/drei";
 
+import { useShallow } from "zustand/shallow";
 import { useSceneStore } from "@/app/_store/store";
 
-import GhostPlane from "@/app/_Editor/Creation/GhostPlane";
 import { useCreateOnClick } from "../Creation/useCreateOnClick";
 import { useGhostPlacement } from "../Creation/useGhostPlacement";
 import { useDragTransform } from "../Interaction/useDragTransform";
@@ -17,6 +17,8 @@ import { useRaycaster } from "../Raycasting/useRaycaster";
 import { usePostprocessing } from "./usePostprocessing";
 import { useSceneEvents } from "./useSceneEvents";
 import { useCameraZoom } from "../Interaction/useCameraZoom";
+
+import GhostPlane from "@/app/_Editor/Creation/GhostPlane";
 
 export default function SceneRoot() {
   const { scene, gl } = useThree();
@@ -29,7 +31,10 @@ export default function SceneRoot() {
     desiredShape,
     hoveredObjectId,
     selectedGeometry,
+    isTransformControlsActive,
+    setIsTransformControlsActive,
     setScene,
+    setGeometryTransformation,
   } = useSceneStore(
     useShallow((s) => ({
       sceneObj: s.sceneObj,
@@ -39,7 +44,10 @@ export default function SceneRoot() {
       desiredShape: s.desiredShape,
       hoveredObjectId: s.hoveredObjectId,
       selectedGeometry: s.selectedGeometry,
+      isTransformControlsActive: s.isTransformControlsActive,
+      setIsTransformControlsActive: s.setIsTransformControlsActive,
       setScene: s.setScene,
+      setGeometryTransformation: s.setGeometryTransformation,
     })),
   );
 
@@ -103,10 +111,40 @@ export default function SceneRoot() {
     selectedObject: selectedGeometry,
   });
 
+  const handleTransformChange = () => {
+    if (!selectedGeometry) return;
+
+    const { position, rotation, scale } = selectedGeometry;
+
+    setGeometryTransformation({
+      position: { x: position.x, y: position.y, z: position.z },
+      rotation: { x: rotation.x, y: rotation.y, z: rotation.z },
+      scale: { x: scale.x, y: scale.y, z: scale.z },
+    });
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "c" && selectedGeometry) {
+        setIsTransformControlsActive(!isTransformControlsActive);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedGeometry, isTransformControlsActive]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <>
       {createMode && ghostPos && desiredShape && (
         <GhostPlane desiredShape={desiredShape} position={ghostPos} />
+      )}
+
+      {selectedGeometry && isTransformControlsActive && (
+        <TransformControls
+          object={selectedGeometry}
+          onChange={handleTransformChange}
+        />
       )}
     </>
   );

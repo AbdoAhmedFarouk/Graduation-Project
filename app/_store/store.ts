@@ -33,8 +33,8 @@ const initialState = {
     far: 20,
   },
   sceneZoom: 100,
-  //LIGHTS
   sceneLights: [],
+  isTransformControlsActive: false,
 };
 
 export const useSceneStore = create<SceneState>()(
@@ -70,11 +70,6 @@ export const useSceneStore = create<SceneState>()(
     },
     setGeometryTransformation: (transformation) =>
       set((state) => {
-        const selectedObj = state.sceneObjects.find(
-          (obj) => obj.uuid === state.selectedGeometry?.uuid,
-        );
-        if (selectedObj?.userData.isLocked) return state;
-
         return {
           geometryTransformation: {
             ...state.geometryTransformation,
@@ -177,9 +172,8 @@ export const useSceneStore = create<SceneState>()(
       set((state) => {
         if (!state.sceneObj) return state;
 
-        // Check if a light of this type already exists
         const existingLight = state.sceneLights.find((l) => l.type === type);
-        if (existingLight) return state; // Don't add duplicate light types
+        if (existingLight) return state;
 
         const id = crypto.randomUUID();
         let light: THREE.Light;
@@ -255,7 +249,6 @@ export const useSceneStore = create<SceneState>()(
 
         if (!light) return state;
 
-        // Handle type change - reset all properties to defaults for new type
         if (patch.type && patch.type !== lightData.type) {
           state.sceneObj.remove(light);
 
@@ -311,7 +304,6 @@ export const useSceneStore = create<SceneState>()(
           };
         }
 
-        // Handle regular updates (non-type changes)
         if (patch.color) light.color.set(`#${patch.color}`);
         if (patch.intensity !== undefined) light.intensity = patch.intensity;
 
@@ -363,6 +355,8 @@ export const useSceneStore = create<SceneState>()(
           sceneLights: state.sceneLights.filter((l) => l.id !== id),
         };
       }),
+    setIsTransformControlsActive: (isActive) =>
+      set({ isTransformControlsActive: isActive }),
   })),
 );
 

@@ -252,7 +252,6 @@ export default function RightSidebar() {
   const [showFogColorPicker, setShowFogColorPicker] = useState<boolean>(false);
   const [isFogSettingActive, setIsFogSettingActive] = useState<boolean>(false);
   const [isFogActive, setIsFogActive] = useState<boolean>(false);
-  // lights
   const [showLightColorPicker, setShowLightColorPicker] =
     useState<boolean>(false);
   const [isLightSettingActive, setIsLightSettingActive] =
@@ -269,16 +268,15 @@ export default function RightSidebar() {
     sceneZoom,
     sceneFog,
     sceneLights,
-
     setSceneBg,
     setGeometryTransformation,
     setGeometryMaterial,
     setGeometryVisibility,
     setSceneFog,
-
     addLightToScene,
     updateLight,
     removeLight,
+    setIsTransformControlsActive,
   } = useSceneStore(
     useShallow((state) => ({
       sceneObj: state.sceneObj,
@@ -290,16 +288,15 @@ export default function RightSidebar() {
       sceneFog: state.sceneFog,
       sceneZoom: state.sceneZoom,
       sceneLights: state.sceneLights,
-
       setSceneBg: state.setSceneBg,
       setGeometryTransformation: state.setGeometryTransformation,
       setGeometryMaterial: state.setGeometryMaterial,
       setGeometryVisibility: state.setGeometryVisibility,
       setSceneFog: state.setSceneFog,
-
       addLightToScene: state.addLightToScene,
       updateLight: state.updateLight,
       removeLight: state.removeLight,
+      setIsTransformControlsActive: state.setIsTransformControlsActive,
     })),
   );
 
@@ -312,8 +309,6 @@ export default function RightSidebar() {
   const handlePressEnterKey = useHandlePressEnterKey();
   const handleToggle = useToggleState();
 
-  console.log(selectedGeometry);
-
   const applyGeometryTransformation = (
     patch: Partial<{
       pos: { x: number; y: number; z: number };
@@ -322,8 +317,6 @@ export default function RightSidebar() {
     }>,
   ) => {
     if (!selectedGeometry) return;
-
-    if (selectedGeometry.userData?.isLocked) return;
 
     if (patch.pos) {
       selectedGeometry.position.set(patch.pos.x, patch.pos.y, patch.pos.z);
@@ -486,14 +479,12 @@ export default function RightSidebar() {
     );
   }, [isFogActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Initialize ambient light when scene is ready
   useEffect(() => {
     if (sceneObj && isLightActive && sceneLights.length === 0) {
       addLightToScene("AmbientLight");
     }
   }, [sceneObj, isLightActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Handle light toggle on/off
   useEffect(() => {
     if (isLightActive) {
       if (sceneLights.length === 0) {
@@ -505,8 +496,6 @@ export default function RightSidebar() {
       setIsLightSettingActive(false);
     }
   }, [isLightActive]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  console.log(sceneObj);
 
   useOutsideClick(showSceneColorPicker, setShowSceneColorPicker, sceneColorRef);
   useOutsideClick(
@@ -716,7 +705,6 @@ export default function RightSidebar() {
 
         <hr className="w-full bg-secondary/40 h-[1px] border-0" />
 
-        {/* lights */}
         <div className="mt-4 pb-3 hover:bg-cards/90 text-xs">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 flex-1">

@@ -11,6 +11,8 @@ export function useCreateOnClick(scene: THREE.Scene) {
     setCreateMode,
     setGhostPos,
     setSceneObjects,
+    setSelectedGeometry,
+    setIsTransformControlsActive,
   } = useSceneStore(
     useShallow((s) => ({
       createMode: s.createMode,
@@ -19,6 +21,8 @@ export function useCreateOnClick(scene: THREE.Scene) {
       setCreateMode: s.setCreateMode,
       setGhostPos: s.setGhostPos,
       setSceneObjects: s.setSceneObjects,
+      setSelectedGeometry: s.setSelectedGeometry,
+      setIsTransformControlsActive: s.setIsTransformControlsActive,
     })),
   );
 
@@ -26,6 +30,7 @@ export function useCreateOnClick(scene: THREE.Scene) {
     if (!createMode || !ghostPos || !desiredShape) return;
 
     const geometry = GEOMETRIES_TYPE[desiredShape]();
+    geometry.center();
 
     const material = new THREE.MeshBasicMaterial({
       color: "#eeba2c",
@@ -35,10 +40,11 @@ export function useCreateOnClick(scene: THREE.Scene) {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.userData.type = geometry.userData.type;
     mesh.position.copy(ghostPos);
-    // mesh.add(light);
 
     scene.add(mesh);
     setSceneObjects(mesh);
+    setSelectedGeometry(mesh);
+    setIsTransformControlsActive(true);
 
     setGhostPos(null);
     setCreateMode(false);
