@@ -35,87 +35,87 @@ const initialState = {
   sceneZoom: 100,
   sceneLights: [],
   isTransformControlsActive: false,
+  transformMode: "translate",
+  isResizing: false,
+  resizeHandle: null,
 };
 
 export const useSceneStore = create<SceneState>()(
   devtools((set) => ({
     ...initialState,
 
-    updateSceneZoom: (zoom: number) => set({ sceneZoom: zoom }),
+    setUpdateSceneZoom: (zoom) => set({ sceneZoom: zoom }),
     setScene: (sceneObj) => set({ sceneObj }),
     setSceneBg: (color) => set({ sceneBg: color }),
-    setSceneObjects: (obj) =>
+    setAddObjectsToScene: (obj) =>
       set((state) => ({
         sceneObjects: [obj, ...state.sceneObjects],
       })),
     setSelectedGeometry: (obj) =>
       set((state) => ({
         selectedGeometry:
-          obj && state.selectedGeometry?.id !== obj.id ? obj : null,
+          obj && state.selectedGeometry?.uuid !== obj.uuid ? obj : null,
       })),
     setGhostPos: (pos) => set({ ghostPos: pos }),
     setCreateMode: (state) => set({ createMode: state }),
     setDesiredShape: (shape) => set({ desiredShape: shape }),
     setLastSelected2D: (shape) => set({ lastSelected2D: shape }),
     setLastSelected3D: (shape) => set({ lastSelected3D: shape }),
-    setHoveredObjectId: (id: string | null) => set({ hoveredObjectId: id }),
-    setUpdateObjectName: (id: string, name: string) => {
+    setHoveredObjectId: (id) => set({ hoveredObjectId: id }),
+    setUpdateObjectName: (id, name) => {
       set((state) => {
         const obj = state.sceneObjects.find((o) => o.uuid === id);
         if (obj) {
-          obj.userData.type = name;
+          obj.name = name;
+          obj.userData.name = name;
         }
         return { sceneObjects: [...state.sceneObjects] };
       });
     },
     setGeometryTransformation: (transformation) =>
-      set((state) => {
-        return {
-          geometryTransformation: {
-            ...state.geometryTransformation,
-            ...transformation,
-            position: transformation.position
-              ? {
-                  ...state.geometryTransformation.position,
-                  ...transformation.position,
-                }
-              : state.geometryTransformation.position,
-            scale: transformation.scale
-              ? {
-                  ...state.geometryTransformation.scale,
-                  ...transformation.scale,
-                }
-              : state.geometryTransformation.scale,
-            rotation: transformation.rotation
-              ? {
-                  ...state.geometryTransformation.rotation,
-                  ...transformation.rotation,
-                }
-              : state.geometryTransformation.rotation,
+      set((state) => ({
+        geometryTransformation: {
+          ...state.geometryTransformation,
+          ...transformation,
+          position: {
+            ...state.geometryTransformation.position,
+            ...transformation.position,
           },
-        };
-      }),
+          scale: {
+            ...state.geometryTransformation.scale,
+            ...transformation.scale,
+          },
+          rotation: {
+            ...state.geometryTransformation.rotation,
+            ...transformation.rotation,
+          },
+        },
+      })),
     setGeometryMaterial: (material) =>
       set((state) => ({
         geometryMaterial: {
           ...state.geometryMaterial,
           ...(material.type && { type: material.type }),
           ...(material.color && { color: material.color }),
-          props: material.props
-            ? { ...state.geometryMaterial.props, ...material.props }
-            : state.geometryMaterial.props,
+          props: { ...state.geometryMaterial.props, ...material.props },
         },
       })),
-    setGeometryVisibility: (objId: string, isVisible: boolean) =>
+    setObjectVisibility: (objId, isVisible) =>
       set((state) => {
         const obj = state.sceneObjects.find((o) => o.uuid === objId);
         if (obj) {
-          obj.userData.isVisible = isVisible;
           obj.visible = isVisible;
+          obj.userData.isVisible = isVisible;
         }
-        return { sceneObjects: [...state.sceneObjects] };
+        return {
+          sceneObjects: [...state.sceneObjects],
+          selectedGeometry:
+            !isVisible && state.selectedGeometry?.uuid === objId
+              ? null
+              : state.selectedGeometry,
+        };
       }),
-    setGeometryLocked: (objId: string, isLocked: boolean) =>
+    setObjectLocked: (objId, isLocked) =>
       set((state) => {
         const obj = state.sceneObjects.find((o) => o.uuid === objId);
         if (obj) {
@@ -127,48 +127,37 @@ export const useSceneStore = create<SceneState>()(
       set((state) => {
         if (!state.sceneObj) return state;
 
-        const updatedSceneFog = { ...state.sceneFog };
-        if (patch.color) {
-          updatedSceneFog.color = patch.color;
-        }
-        const fogColor = `#${updatedSceneFog.color}`;
+        const updatedSceneFog = { ...state.sceneFog, ...patch };
+        const colorStr = `#${updatedSceneFog.color}`;
 
         if (patch.type !== undefined) {
           if (patch.type === "") {
-            updatedSceneFog.type = "";
             state.sceneObj.fog = null;
           } else if (patch.type === "Fog") {
-            updatedSceneFog.type = "Fog";
-            state.sceneObj.fog = new THREE.Fog(fogColor, 0.1, 20);
+            state.sceneObj.fog = new THREE.Fog(
+              colorStr,
+              updatedSceneFog.near,
+              updatedSceneFog.far,
+            );
           } else if (patch.type === "FogExp2") {
-            updatedSceneFog.type = "FogExp2";
-            state.sceneObj.fog = new THREE.FogExp2(fogColor, 0.1);
+            state.sceneObj.fog = new THREE.FogExp2(
+              colorStr,
+              updatedSceneFog.density,
+            );
           }
         }
 
         const fog = state.sceneObj.fog;
         if (fog) {
-          if (patch.color) {
-            fog.color.set(fogColor);
-            updatedSceneFog.color = patch.color;
-          }
-          if (patch.density !== undefined && "density" in fog) {
-            fog.density = patch.density;
-            updatedSceneFog.density = patch.density;
-          }
-          if (patch.near !== undefined && "near" in fog) {
-            fog.near = patch.near;
-            updatedSceneFog.near = patch.near;
-          }
-          if (patch.far !== undefined && "far" in fog) {
-            fog.far = patch.far;
-            updatedSceneFog.far = patch.far;
-          }
+          fog.color.set(colorStr);
+          if ("density" in fog) fog.density = updatedSceneFog.density;
+          if ("near" in fog) fog.near = updatedSceneFog.near;
+          if ("far" in fog) fog.far = updatedSceneFog.far;
         }
 
-        return { ...state, sceneFog: updatedSceneFog };
+        return { sceneFog: updatedSceneFog };
       }),
-    addLightToScene: (type = "AmbientLight") =>
+    setAddLightToScene: (type = "AmbientLight") =>
       set((state) => {
         if (!state.sceneObj) return state;
 
@@ -189,18 +178,18 @@ export const useSceneStore = create<SceneState>()(
             break;
           case "DirectionalLight":
             light = new THREE.DirectionalLight(0xffffff, 1);
-            position = { x: 5, y: 5, z: 5 };
+            position = { x: 0, y: 0, z: 0 };
             intensity = 1;
             break;
           case "PointLight":
             light = new THREE.PointLight(0xffffff, 1);
-            position = { x: 3, y: 3, z: 3 };
+            position = { x: 0, y: 0, z: 0 };
             intensity = 1;
             distance = 100;
             break;
           case "SpotLight":
             light = new THREE.SpotLight(0xffffff, 1);
-            position = { x: 5, y: 5, z: 5 };
+            position = { x: 0, y: 0, z: 0 };
             intensity = 1;
             angle = Math.PI / 4;
             break;
@@ -236,7 +225,7 @@ export const useSceneStore = create<SceneState>()(
           sceneLights: [...state.sceneLights, lightData],
         };
       }),
-    updateLight: (id, patch) =>
+    setUpdateLight: (id, patch) =>
       set((state) => {
         const lightData = state.sceneLights.find((l) => l.id === id);
         if (!lightData) return state;
@@ -264,17 +253,17 @@ export const useSceneStore = create<SceneState>()(
               break;
             case "DirectionalLight":
               newLight = new THREE.DirectionalLight(0xffffff, 1);
-              newPosition = { x: 5, y: 5, z: 5 };
+              newPosition = { x: 0, y: 0, z: 0 };
               break;
             case "PointLight":
               newLight = new THREE.PointLight(0xffffff, 1);
-              newPosition = { x: 3, y: 3, z: 3 };
+              newPosition = { x: 0, y: 0, z: 0 };
               newDistance = 100;
               (newLight as THREE.PointLight).distance = newDistance;
               break;
             case "SpotLight":
               newLight = new THREE.SpotLight(0xffffff, 1);
-              newPosition = { x: 5, y: 5, z: 5 };
+              newPosition = { x: 0, y: 0, z: 0 };
               newAngle = Math.PI / 4;
               (newLight as THREE.SpotLight).angle = newAngle;
               break;
@@ -341,7 +330,7 @@ export const useSceneStore = create<SceneState>()(
           ),
         };
       }),
-    removeLight: (id) =>
+    setRemoveLightFromScene: (id) =>
       set((state) => {
         const lightData = state.sceneLights.find((l) => l.id === id);
         if (!lightData) return state;
@@ -357,16 +346,28 @@ export const useSceneStore = create<SceneState>()(
       }),
     setIsTransformControlsActive: (isActive) =>
       set({ isTransformControlsActive: isActive }),
+    setTransformMode: (mode) => set({ transformMode: mode }),
+    setIsResizing: (v) => set({ isResizing: v }),
+    setResizeHandle: (h) => set({ resizeHandle: h }),
+    setDeleteSelectedObject: () =>
+      set((state) => {
+        if (!state.selectedGeometry) return state;
+        const uuid = state.selectedGeometry.uuid;
+        const objInScene = state.sceneObj?.getObjectByProperty("uuid", uuid);
+        if (objInScene) state.sceneObj?.remove(objInScene);
+
+        return {
+          sceneObjects: state.sceneObjects.filter((o) => o.uuid !== uuid),
+          selectedGeometry: null,
+          isTransformControlsActive: false,
+        };
+      }),
   })),
 );
 
 export const useMiddlebarStore = create<MiddlebarState>()(
   devtools((set) => ({
     activeMenu: null,
-
-    setActiveMenu: (condition) =>
-      set(() => ({
-        activeMenu: condition,
-      })),
+    setActiveMenu: (condition) => set({ activeMenu: condition }),
   })),
 );

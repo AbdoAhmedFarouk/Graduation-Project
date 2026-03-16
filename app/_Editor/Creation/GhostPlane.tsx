@@ -1,17 +1,24 @@
 import * as THREE from "three";
-import { forwardRef } from "react";
+import { forwardRef, useMemo } from "react";
 import { GEOMETRIES_TYPE } from "@/app/_Editor/Creation/sceneGeometries";
+import { useSceneStore } from "@/app/_store/store";
 
-type GhostPlaneProps = { position: THREE.Vector3; desiredShape: string };
+type GhostPlaneProps = { desiredShape: string };
 
-const GhostPlane = forwardRef(
-  ({ position, desiredShape }: GhostPlaneProps, ref) => {
-    const geometry = GEOMETRIES_TYPE[desiredShape]?.();
+const GhostPlane = forwardRef<THREE.Mesh, GhostPlaneProps>(
+  ({ desiredShape }, ref) => {
+    const ghostPos = useSceneStore((s) => s.ghostPos);
 
-    if (!geometry) return null;
+    const geometry = useMemo(() => {
+      const geo = GEOMETRIES_TYPE[desiredShape]?.();
+      if (geo) geo.center();
+      return geo;
+    }, [desiredShape]);
+
+    if (!geometry || !ghostPos) return null;
 
     return (
-      <mesh ref={ref} position={position} geometry={geometry}>
+      <mesh ref={ref} position={ghostPos} geometry={geometry}>
         <meshStandardMaterial
           color="#ffffff"
           opacity={0.4}
@@ -20,7 +27,7 @@ const GhostPlane = forwardRef(
         />
       </mesh>
     );
-  }
+  },
 );
 
 GhostPlane.displayName = "GhostPlane";

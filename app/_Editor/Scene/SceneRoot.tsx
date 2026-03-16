@@ -1,12 +1,12 @@
 "use client";
 
 import * as THREE from "three";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { TransformControls as TransformControlsImpl } from "three-stdlib";
 import { useThree } from "@react-three/fiber";
 import { TransformControls } from "@react-three/drei";
-
-import { useShallow } from "zustand/shallow";
 import { useSceneStore } from "@/app/_store/store";
+import { useShallow } from "zustand/shallow";
 
 import { useCreateOnClick } from "../Creation/useCreateOnClick";
 import { useGhostPlacement } from "../Creation/useGhostPlacement";
@@ -14,45 +14,45 @@ import { useDragTransform } from "../Interaction/useDragTransform";
 import { useHoverDetection } from "../Interaction/useHoverDetection";
 import { useSelection } from "../Interaction/useSelection";
 import { useRaycaster } from "../Raycasting/useRaycaster";
-import { usePostprocessing } from "./usePostprocessing";
 import { useSceneEvents } from "./useSceneEvents";
 import { useCameraZoom } from "../Interaction/useCameraZoom";
-
 import GhostPlane from "@/app/_Editor/Creation/GhostPlane";
+import { useResizeHandles } from "../Interaction/useResizeHandles";
 
 export default function SceneRoot() {
   const { scene, gl } = useThree();
-
   const {
-    sceneObj,
-    sceneObjects,
     createMode,
-    ghostPos,
     desiredShape,
-    hoveredObjectId,
     selectedGeometry,
     isTransformControlsActive,
-    setIsTransformControlsActive,
-    setScene,
-    setGeometryTransformation,
+    transformMode,
+    sceneObjects,
   } = useSceneStore(
     useShallow((s) => ({
-      sceneObj: s.sceneObj,
-      sceneObjects: s.sceneObjects,
       createMode: s.createMode,
-      ghostPos: s.ghostPos,
       desiredShape: s.desiredShape,
-      hoveredObjectId: s.hoveredObjectId,
       selectedGeometry: s.selectedGeometry,
       isTransformControlsActive: s.isTransformControlsActive,
-      setIsTransformControlsActive: s.setIsTransformControlsActive,
-      setScene: s.setScene,
-      setGeometryTransformation: s.setGeometryTransformation,
+      transformMode: s.transformMode,
+      sceneObjects: s.sceneObjects,
     })),
   );
 
-  const create = useCreateOnClick(scene);
+  const setScene = useSceneStore((s) => s.setScene);
+  const setGeometryTransformation = useSceneStore(
+    (s) => s.setGeometryTransformation,
+  );
+  const setIsTransformControlsActive = useSceneStore(
+    (s) => s.setIsTransformControlsActive,
+  );
+  const setIsResizing = useSceneStore((s) => s.setIsResizing);
+  const setResizeHandle = useSceneStore((s) => s.setResizeHandle);
 
+  const transformRef = useRef<TransformControlsImpl>(null);
+
+  const create = useCreateOnClick(scene);
+  useResizeHandles();
   useCameraZoom();
 
   useEffect(() => {
@@ -63,13 +63,17 @@ export default function SceneRoot() {
 
   const hover = useHoverDetection({
     intersectObjects: raycaster.intersectObjects,
-    sceneObjects: sceneObjects!,
+    sceneObjects: scene.children.filter((c) => {
+      if (c.userData.isResizeHandle || c.userData.isHelper) return false;
+      if (c.visible === false || c.userData.isVisible === false) return false;
+
+      return sceneObjects.some((o) => o.uuid === c.uuid);
+    }),
   });
 
   const selection = useSelection({
     domElement: gl.domElement,
     intersectObjects: raycaster.intersectObjects,
-    sceneObjects: sceneObj?.children ?? [],
   });
 
   const drag = useDragTransform({
@@ -91,31 +95,34 @@ export default function SceneRoot() {
     onPointerDown: (e) => {
       raycaster.updateFromEvent(e);
 
-      if (createMode) return;
+      const state = useSceneStore.getState();
+      if (state.createMode) return;
 
-      const children = (sceneObj?.children ?? []) as THREE.Object3D[];
-      const hits = raycaster.intersectObjects(children);
-      selection.onPointerDown(e as PointerEvent);
-      drag.onPointerDown(hits[0]?.object ?? null);
+      const allHits = raycaster.intersectObjects(scene.children);
+      const resizeHit = allHits.find((h) => h.object.userData.isResizeHandle);
+
+      if (resizeHit) {
+        setIsResizing(true);
+        setResizeHandle(resizeHit.object);
+        drag.onPointerDown(resizeHit.object);
+      } else {
+        selection.onPointerDown(e as PointerEvent);
+
+        const children = (state.sceneObj?.children ?? []) as THREE.Object3D[];
+        const hits = raycaster.intersectObjects(children);
+        drag.onPointerDown(hits[0]?.object ?? null);
+      }
     },
-    onPointerUp: drag.onPointerUp,
+    onPointerUp: () => {
+      setIsResizing(false);
+      drag.onPointerUp();
+    },
     onClick: create.onClick,
-  });
-
-  const hoveredObject =
-    sceneObjects.find((o) => o!.uuid === hoveredObjectId) ?? null;
-
-  usePostprocessing({
-    scene,
-    hoveredObject,
-    selectedObject: selectedGeometry,
   });
 
   const handleTransformChange = () => {
     if (!selectedGeometry) return;
-
     const { position, rotation, scale } = selectedGeometry;
-
     setGeometryTransformation({
       position: { x: position.x, y: position.y, z: position.z },
       rotation: { x: rotation.x, y: rotation.y, z: rotation.z },
@@ -124,25 +131,45 @@ export default function SceneRoot() {
   };
 
   useEffect(() => {
+    if (!selectedGeometry && transformRef.current) {
+      transformRef.current.detach();
+    }
+  }, [selectedGeometry]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const state = useSceneStore.getState();
+      const { selectedGeometry, isTransformControlsActive } = state;
+
       if (e.key.toLowerCase() === "c" && selectedGeometry) {
         setIsTransformControlsActive(!isTransformControlsActive);
+      }
+
+      if (e.key === "Delete" && selectedGeometry) {
+        if (transformRef.current) {
+          transformRef.current.detach();
+        }
+        useSceneStore.getState().setDeleteSelectedObject();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedGeometry, isTransformControlsActive]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [
+    setIsTransformControlsActive,
+    selectedGeometry,
+    isTransformControlsActive,
+  ]);
 
   return (
     <>
-      {createMode && ghostPos && desiredShape && (
-        <GhostPlane desiredShape={desiredShape} position={ghostPos} />
-      )}
+      {createMode && desiredShape && <GhostPlane desiredShape={desiredShape} />}
 
       {selectedGeometry && isTransformControlsActive && (
         <TransformControls
+          ref={transformRef}
           object={selectedGeometry}
+          mode={transformMode}
           onChange={handleTransformChange}
         />
       )}

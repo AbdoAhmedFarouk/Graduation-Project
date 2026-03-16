@@ -3,6 +3,7 @@ import ShapeToolButton from "../Tools/ShapeToolButton";
 import { GEOMETRIES_TYPE } from "@/app/_Editor/Creation/sceneGeometries";
 import { Button } from "../ui/button";
 import ShapesButton from "../Tools/ShapesButton";
+import ModelDropdownMenu from "../Tools/ModelDropdownMenu";
 
 export default function MiddleBar({
   onClick,
@@ -15,19 +16,17 @@ export default function MiddleBar({
 
   return (
     <div className="absolute flex items-center text-secondary left-1/2 top-5 p-2 -translate-x-1/2 rounded-xl bg-surface">
-      <ShapeToolButton
-        onClick={handleVirtualClick}
-        wrapperClassName="me-3 h-8"
-        asChild
-      >
-        <Button
-          size="sm"
-          className="hover:bg-secondary/20"
-          variant="customVariant"
-        >
-          <Plus />
-        </Button>
-      </ShapeToolButton>
+      <div className="me-3 flex items-center h-8 gap-0">
+         <ModelDropdownMenu>
+           <Button
+             size="sm"
+             className="hover:bg-secondary/20"
+             variant="customVariant"
+           >
+             <Plus size={20} />
+           </Button>
+         </ModelDropdownMenu>
+      </div>
 
       <ShapesButton onClick={onClick} />
 

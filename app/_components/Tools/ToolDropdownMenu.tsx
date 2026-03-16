@@ -57,9 +57,10 @@ export default function ToolDropdownMenu({
           {otherShapes.map((shape) => (
             <li
               key={shape.geometry}
-              onClick={() =>
-                onClick?.(shape.geometry as keyof typeof GEOMETRIES_TYPE)
-              }
+              onClick={(e) => {
+                e.stopPropagation();
+                onClick?.(shape.geometry as keyof typeof GEOMETRIES_TYPE);
+              }}
               className="flex cursor-pointer items-center gap-2 text-sm hover:bg-borders py-1 px-4 rounded-md"
             >
               <span>

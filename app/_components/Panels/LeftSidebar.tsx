@@ -1,13 +1,11 @@
 "use client";
 
 import * as THREE from "three";
-
 import { useState } from "react";
 import { useShallow } from "zustand/shallow";
 
 import { Button } from "@/app/_components/ui/button";
 import { Input } from "@/app/_components/ui/input";
-
 import {
   GEOMETRIES_2D,
   GEOMETRIES_3D,
@@ -18,24 +16,21 @@ import {
   ArrowLeft,
   Menu,
   Search,
-  Square,
   Eye,
   EyeOff,
   Lock,
   LockOpen,
+  Upload,
 } from "lucide-react";
-
 // import { postImage } from "@/app/_lib/actions";
 // const initialState = {
 //   image: "",
 //   success: true,
 // };
-
 export default function LeftSidebar() {
   const [search, setSearch] = useState("");
   // const [formState, formAction] = useActionState(postImage, initialState);
   // console.log(formState);
-
   const {
     sceneObjects,
     hoveredObjectId,
@@ -43,8 +38,8 @@ export default function LeftSidebar() {
     setHoveredObjectId,
     setSelectedGeometry,
     setUpdateObjectName,
-    setGeometryVisibility,
-    setGeometryLocked,
+    setObjectVisibility,
+    setObjectLocked,
   } = useSceneStore(
     useShallow((state) => ({
       sceneObjects: state.sceneObjects,
@@ -53,58 +48,35 @@ export default function LeftSidebar() {
       setHoveredObjectId: state.setHoveredObjectId,
       setSelectedGeometry: state.setSelectedGeometry,
       setUpdateObjectName: state.setUpdateObjectName,
-      setGeometryVisibility: state.setGeometryVisibility,
-      setGeometryLocked: state.setGeometryLocked,
+      setObjectVisibility: state.setObjectVisibility,
+      setObjectLocked: state.setObjectLocked,
     })),
   );
 
-  const handleGeometryHover = (id: string) => {
-    setHoveredObjectId(id);
-  };
-
-  const handleGeometryLeave = () => {
-    setHoveredObjectId(null);
-  };
-
-  const handleToggleVisibility = (
-    e: React.MouseEvent<HTMLSpanElement>,
-    objId: string,
-  ) => {
+  const handleToggleVisibility = (e: React.MouseEvent, objId: string) => {
     e.stopPropagation();
     const obj = sceneObjects.find((o) => o.uuid === objId);
     if (obj) {
-      const newVisibility = obj.userData.isVisible !== false ? false : true;
-      setGeometryVisibility(objId, newVisibility);
+      const currentVisibility = obj.visible;
+      setObjectVisibility(objId, !currentVisibility);
     }
   };
 
-  const handleToggleLock = (
-    e: React.MouseEvent<HTMLSpanElement>,
-    objId: string,
-  ) => {
+  const handleToggleLock = (e: React.MouseEvent, objId: string) => {
     e.stopPropagation();
     const obj = sceneObjects.find((o) => o.uuid === objId);
     if (obj) {
-      const newLockState = !obj.userData.isLocked;
-      setGeometryLocked(objId, newLockState);
+      const currentLock = !!obj.userData.isLocked;
+      setObjectLocked(objId, !currentLock);
     }
   };
 
-  const handleSearch = (value: string) => {
-    setSearch(value);
-  };
-
-  const handleChangeGeometryName = (
-    e: React.MouseEvent<HTMLLIElement>,
-    objId: string,
-  ) => {
-    const li = e.currentTarget;
-    const span = li.querySelector(
-      "div:first-of-type span:last-child",
+  const handleEditName = (e: React.MouseEvent<HTMLLIElement>, id: string) => {
+    const span = e.currentTarget.querySelector(
+      ".obj-name-span",
     ) as HTMLSpanElement;
-
     const parent = span?.parentElement;
-    if (!parent) return;
+    if (!parent || !span) return;
 
     const currentName = span.textContent || "";
     const input = document.createElement("input");
@@ -113,17 +85,23 @@ export default function LeftSidebar() {
     input.className =
       "px-1 rounded-xs bg-transparent text-secondary outline-none w-full";
 
-    input.onblur = () => {
+    const finishEdit = () => {
       const newName = input.value;
       if (input.parentNode === parent) {
         parent.replaceChild(span, input);
-        span.textContent = newName;
-        setUpdateObjectName(objId, newName);
+        if (newName && newName !== currentName) {
+          setUpdateObjectName(id, newName);
+        }
       }
     };
 
+    input.onblur = finishEdit;
     input.onkeydown = (event) => {
       if (event.key === "Enter") input.blur();
+      if (event.key === "Escape") {
+        input.value = currentName;
+        input.blur();
+      }
     };
 
     parent.replaceChild(input, span);
@@ -139,7 +117,6 @@ export default function LeftSidebar() {
           </span>
           <p>Untitled</p>
         </div>
-
         <span className="hover:text-secondary text-secondary/50">
           <Menu size={18} />
         </span>
@@ -180,12 +157,14 @@ export default function LeftSidebar() {
       </div>
 
       <hr className="w-full bg-secondary/40 h-[1px] border-0" />
+
       <div className="mt-4 text-secondary flex flex-col flex-1 overflow-hidden">
         <div className="relative">
           <Input
             className="border-0 bg-borders ps-10 focus-visible:ring-0 selection:bg-hover/50"
-            placeholder="Search"
-            onChange={(e) => handleSearch(e.target.value)}
+            placeholder="Search objects..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
           />
           <span className="absolute left-2 top-1/2 -translate-y-1/2">
             <Search size={16} />
@@ -195,7 +174,7 @@ export default function LeftSidebar() {
         <ul className="mt-4 text-secondary/80 text-sm *:not-last:before:h-full *:p-1 flex-1 overflow-y-auto">
           {sceneObjects
             .filter((obj) => {
-              const name = obj.userData?.type || "";
+              const name = obj.name || (obj.userData?.type as string) || "";
               return (
                 search.length === 0 ||
                 name.toLowerCase().includes(search.toLowerCase())
@@ -203,15 +182,23 @@ export default function LeftSidebar() {
             })
             .map((obj) => {
               const geometryType = (obj as THREE.Mesh).geometry?.userData?.type;
-              const displayName = obj.userData?.type || geometryType;
+
+              const displayName =
+                obj.name ||
+                obj.userData?.name ||
+                obj.userData?.type ||
+                (obj.children[0] && obj.children[0].userData?.type) ||
+                geometryType ||
+                "Unnamed Object";
 
               const Icon =
                 GEOMETRIES_2D.find((g) => g.geometry === geometryType) ||
                 GEOMETRIES_3D.find((g) => g.geometry === geometryType);
-              const IconComp = Icon ? Icon.icon : Square;
+              const IconComp = Icon ? Icon.icon : Upload;
 
               return (
                 <li
+                  key={obj.uuid}
                   className={cn(
                     "relative before:absolute before:left-0 before:top-0 before:bg-secondary/50 before:h-3/5 before:w-[1px] ps-4 after:absolute after:left-[1px] after:bg-secondary/50 after:w-2 after:h-[1px] after:top-3/5 flex items-center justify-between hover:bg-borders focus:bg-borders focus:outline-none",
                     {
@@ -220,31 +207,26 @@ export default function LeftSidebar() {
                         selectedGeometry?.uuid === obj.uuid,
                     },
                   )}
-                  key={obj.uuid}
-                  onMouseEnter={() => handleGeometryHover(obj.uuid)}
-                  onMouseLeave={handleGeometryLeave}
-                  onClick={(e) => {
-                    e.currentTarget.focus();
-                    setSelectedGeometry(obj);
-                  }}
-                  onDoubleClick={(e) => handleChangeGeometryName(e, obj.uuid)}
+                  onMouseEnter={() => setHoveredObjectId(obj.uuid)}
+                  onMouseLeave={() => setHoveredObjectId(null)}
+                  onClick={() => setSelectedGeometry(obj)}
+                  onDoubleClick={(e) => handleEditName(e, obj.uuid)}
                 >
-                  <div className="flex items-center gap-3">
-                    <span>
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <span className="shrink-0">
                       <IconComp size={20} className="mt-0.5" />
                     </span>
-                    <span>{displayName}</span>
+                    <span className="obj-name-span truncate flex-1">
+                      {displayName}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-2 pe-2">
+
+                  <div className="flex items-center gap-2 pe-2 shrink-0">
                     <span
                       onClick={(e) => handleToggleVisibility(e, obj.uuid)}
                       className="cursor-pointer hover:text-secondary transition-colors"
                     >
-                      {obj.userData.isVisible !== false ? (
-                        <Eye size={14} />
-                      ) : (
-                        <EyeOff size={14} />
-                      )}
+                      {obj.visible ? <Eye size={14} /> : <EyeOff size={14} />}
                     </span>
                     <span
                       onClick={(e) => handleToggleLock(e, obj.uuid)}

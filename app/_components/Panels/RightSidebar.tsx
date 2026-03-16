@@ -1,17 +1,17 @@
 "use client";
 
-import * as THREE from "three";
 import { useEffect, useRef, useState } from "react";
+import * as THREE from "three";
 
-import { useShallow } from "zustand/shallow";
 import { useSceneStore } from "@/app/_store/store";
+import { useShallow } from "zustand/shallow";
 
 import CustomColorPicker from "../CustomColorPicker";
 import InputSlider from "../InputSlider";
-import { Checkbox } from "../ui/checkbox";
-import { Label } from "../ui/label";
 import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
 import { Input } from "../ui/input";
+import { Label } from "../ui/label";
 import {
   Select,
   SelectContent,
@@ -22,16 +22,26 @@ import {
 } from "../ui/select";
 import { Switch } from "../ui/switch";
 
-import { useToggleState } from "@/app/_hooks/useToggleState";
+import { GEOMETRIES_2D } from "@/app/_Editor/Creation/sceneGeometries";
+
 import { useOutsideClick } from "@/app/_hooks/useClickOutside";
 import { useHandleChangeColor } from "@/app/_hooks/useHandleChangeColor";
 import { useHandlePressEnterKey } from "@/app/_hooks/useHandlePressEnterKey";
+import { useToggleState } from "@/app/_hooks/useToggleState";
 
-import { getSingleMaterial } from "@/app/_lib/utils";
+import { getMaterialFromObject, getSingleMaterial } from "@/app/_lib/utils";
 import { MaterialValue } from "@/app/_types/material";
-import type { LightType } from "@/app/_types/storeTypes";
+import type { LightType, TransformMode } from "@/app/_types/storeTypes";
 
-import { BringToFront, ChevronDown, ChevronUp, Lightbulb } from "lucide-react";
+import {
+  BringToFront,
+  ChevronDown,
+  ChevronUp,
+  Lightbulb,
+  Move,
+  RotateCw,
+  Scaling,
+} from "lucide-react";
 
 const materials = [
   "MeshBasicMaterial",
@@ -252,8 +262,9 @@ export default function RightSidebar() {
   const [showFogColorPicker, setShowFogColorPicker] = useState<boolean>(false);
   const [isFogSettingActive, setIsFogSettingActive] = useState<boolean>(false);
   const [isFogActive, setIsFogActive] = useState<boolean>(false);
-  const [showLightColorPicker, setShowLightColorPicker] =
-    useState<boolean>(false);
+  const [activeLightColorPickerId, setActiveLightColorPickerId] = useState<
+    string | null
+  >(null);
   const [isLightSettingActive, setIsLightSettingActive] =
     useState<boolean>(true);
   const [isLightActive, setIsLightActive] = useState<boolean>(true);
@@ -268,14 +279,17 @@ export default function RightSidebar() {
     sceneZoom,
     sceneFog,
     sceneLights,
+    transformMode,
+    isTransformControlsActive,
     setSceneBg,
     setGeometryTransformation,
     setGeometryMaterial,
-    setGeometryVisibility,
+    setObjectVisibility,
     setSceneFog,
-    addLightToScene,
-    updateLight,
-    removeLight,
+    setAddLightToScene,
+    setUpdateLight,
+    setRemoveLightFromScene,
+    setTransformMode,
   } = useSceneStore(
     useShallow((state) => ({
       sceneObj: state.sceneObj,
@@ -287,14 +301,17 @@ export default function RightSidebar() {
       sceneFog: state.sceneFog,
       sceneZoom: state.sceneZoom,
       sceneLights: state.sceneLights,
+      isTransformControlsActive: state.isTransformControlsActive,
       setSceneBg: state.setSceneBg,
       setGeometryTransformation: state.setGeometryTransformation,
       setGeometryMaterial: state.setGeometryMaterial,
-      setGeometryVisibility: state.setGeometryVisibility,
+      setObjectVisibility: state.setObjectVisibility,
       setSceneFog: state.setSceneFog,
-      addLightToScene: state.addLightToScene,
-      updateLight: state.updateLight,
-      removeLight: state.removeLight,
+      setAddLightToScene: state.setAddLightToScene,
+      setUpdateLight: state.setUpdateLight,
+      setRemoveLightFromScene: state.setRemoveLightFromScene,
+      transformMode: state.transformMode,
+      setTransformMode: state.setTransformMode,
     })),
   );
 
@@ -330,6 +347,23 @@ export default function RightSidebar() {
     }
   };
 
+  const handleSizeChange = (axis: "x" | "y" | "z", value: number) => {
+    if (!selectedGeometry) return;
+
+    const boundingBox = new THREE.Box3().setFromObject(selectedGeometry);
+    const size = new THREE.Vector3();
+    boundingBox.getSize(size);
+
+    const currentSizeAxis = size[axis];
+    if (currentSizeAxis === 0) return;
+
+    const scaleFactor = value / currentSizeAxis;
+    const newScale = { ...geometryTransformation.scale };
+    newScale[axis] = selectedGeometry.scale[axis] * scaleFactor;
+
+    applyGeometryTransformation({ scale: newScale });
+  };
+
   const handleChangeMaterial = (type: MaterialType) => {
     if (!selectedGeometry) return;
 
@@ -361,7 +395,7 @@ export default function RightSidebar() {
     newMaterial.needsUpdate = true;
 
     updateStoreWithMaterial(newMaterial);
-    if (selectedGeometry) setGeometryVisibility(selectedGeometry.uuid, true);
+    if (selectedGeometry) setObjectVisibility(selectedGeometry.uuid, true);
   };
 
   const updateStoreWithMaterial = (material: THREE.Material) => {
@@ -404,21 +438,32 @@ export default function RightSidebar() {
     });
   };
 
+  console.log(selectedGeometry);
+
   const applyMaterialProperty = (patch: Record<string, MaterialValue>) => {
     if (!selectedGeometry) return;
 
-    const mat = getSingleMaterial((selectedGeometry as THREE.Mesh).material);
-    if (!mat) return;
+    selectedGeometry.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material) {
+        const mat = getSingleMaterial(child.material);
+        if (mat) {
+          const materialAsRecord = mat as unknown as Record<
+            string,
+            MaterialValue
+          >;
+          Object.keys(patch).forEach((key) => {
+            if (key in mat) {
+              materialAsRecord[key] = patch[key];
 
-    const materialAsRecord = mat as unknown as Record<string, MaterialValue>;
-
-    Object.keys(patch).forEach((key) => {
-      if (key in mat) {
-        materialAsRecord[key] = patch[key];
+              if (key === "opacity" && typeof patch[key] === "number") {
+                mat.transparent = patch[key] < 1;
+              }
+            }
+          });
+          mat.needsUpdate = true;
+        }
       }
     });
-
-    mat.needsUpdate = true;
 
     setGeometryMaterial({
       props: {
@@ -456,7 +501,7 @@ export default function RightSidebar() {
       },
     });
 
-    const mat = getSingleMaterial((selectedGeometry as THREE.Mesh).material);
+    const mat = getMaterialFromObject(selectedGeometry);
     if (mat) {
       const snapshot = createMaterialSnapshot(mat);
       setGeometryMaterial(snapshot);
@@ -479,18 +524,18 @@ export default function RightSidebar() {
 
   useEffect(() => {
     if (sceneObj && isLightActive && sceneLights.length === 0) {
-      addLightToScene("AmbientLight");
+      setAddLightToScene("AmbientLight");
     }
   }, [sceneObj, isLightActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isLightActive) {
       if (sceneLights.length === 0) {
-        addLightToScene("AmbientLight");
+        setAddLightToScene("AmbientLight");
       }
       setIsLightSettingActive(true);
     } else {
-      sceneLights.forEach((light) => removeLight(light.id));
+      sceneLights.forEach((light) => setRemoveLightFromScene(light.id));
       setIsLightSettingActive(false);
     }
   }, [isLightActive]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -503,10 +548,26 @@ export default function RightSidebar() {
   );
   useOutsideClick(showFogColorPicker, setShowFogColorPicker, fogColorRef);
   useOutsideClick(
-    showLightColorPicker,
-    setShowLightColorPicker,
+    !!activeLightColorPickerId,
+    () => setActiveLightColorPickerId(null),
     lightColorPickerRef,
   );
+
+  const currentSize = { x: 0, y: 0, z: 0 };
+  let is2D = false;
+  if (selectedGeometry) {
+    const boundingBox = new THREE.Box3().setFromObject(selectedGeometry);
+    const size = new THREE.Vector3();
+    boundingBox.getSize(size);
+
+    currentSize.x = size.x;
+    currentSize.y = size.y;
+    currentSize.z = size.z;
+
+    is2D = GEOMETRIES_2D.some((g) =>
+      selectedGeometry.userData.type?.startsWith(g.geometry),
+    );
+  }
 
   return (
     <div className="absolute flex flex-col text-secondary max-h-[666px] h-full right-5 top-5 bg-surface w-60 rounded-2xl p-3 text-sm cursor-default select-none">
@@ -738,7 +799,7 @@ export default function RightSidebar() {
             <div className="mb-3 flex gap-1 flex-wrap">
               {sceneLights.length === 0 && (
                 <Button
-                  onClick={() => addLightToScene("AmbientLight")}
+                  onClick={() => setAddLightToScene("AmbientLight")}
                   variant="customVariant"
                   size="sm"
                   className="text-xs hover:bg-secondary/20"
@@ -747,7 +808,7 @@ export default function RightSidebar() {
                 </Button>
               )}
               <Button
-                onClick={() => addLightToScene("DirectionalLight")}
+                onClick={() => setAddLightToScene("DirectionalLight")}
                 variant="customVariant"
                 size="sm"
                 className="text-xs hover:bg-secondary/20"
@@ -755,7 +816,7 @@ export default function RightSidebar() {
                 + Directional
               </Button>
               <Button
-                onClick={() => addLightToScene("PointLight")}
+                onClick={() => setAddLightToScene("PointLight")}
                 variant="customVariant"
                 size="sm"
                 className="text-xs hover:bg-secondary/20"
@@ -763,7 +824,7 @@ export default function RightSidebar() {
                 + Point
               </Button>
               <Button
-                onClick={() => addLightToScene("SpotLight")}
+                onClick={() => setAddLightToScene("SpotLight")}
                 variant="customVariant"
                 size="sm"
                 className="text-xs hover:bg-secondary/20"
@@ -783,7 +844,9 @@ export default function RightSidebar() {
                       <Select
                         value={light.type}
                         onValueChange={(newType) =>
-                          updateLight(light.id, { type: newType as LightType })
+                          setUpdateLight(light.id, {
+                            type: newType as LightType,
+                          })
                         }
                       >
                         <SelectTrigger size="sm" className="w-full text-xs">
@@ -814,33 +877,31 @@ export default function RightSidebar() {
                     pickerClassname="light"
                     background={light.color}
                     ref={lightColorPickerRef}
-                    showColorPicker={showLightColorPicker}
-                    onClick={(e) =>
-                      handleToggle(
-                        showLightColorPicker,
-                        setShowLightColorPicker,
-                        e,
+                    showColorPicker={activeLightColorPickerId === light.id}
+                    onClick={() =>
+                      setActiveLightColorPickerId((prev) =>
+                        prev === light.id ? null : light.id,
                       )
                     }
                     onColorPickerChange={(color) =>
-                      updateLight(light.id, {
+                      setUpdateLight(light.id, {
                         color: color.replace("#", ""),
                       })
                     }
                     onInputChange={(value) =>
-                      updateLight(light.id, {
+                      setUpdateLight(light.id, {
                         color: value.replace("#", ""),
                       })
                     }
                     onBlur={(e) =>
-                      updateLight(light.id, {
+                      setUpdateLight(light.id, {
                         color: e.target.value.replace("#", ""),
                       })
                     }
                     onKeyDown={(e) =>
                       handlePressEnterKey(
                         e,
-                        (color) => updateLight(light.id, { color }),
+                        (color) => setUpdateLight(light.id, { color }),
                         undefined,
                         undefined,
                       )
@@ -859,7 +920,7 @@ export default function RightSidebar() {
                     isSpecialProperty={true}
                     specialPropertyValue={light.intensity}
                     onChange={(value) =>
-                      updateLight(light.id, {
+                      setUpdateLight(light.id, {
                         intensity: value,
                       })
                     }
@@ -877,7 +938,7 @@ export default function RightSidebar() {
                               value={(light.position?.[axis] ?? 0).toFixed(2)}
                               step={0.5}
                               onChange={(e) =>
-                                updateLight(light.id, {
+                                setUpdateLight(light.id, {
                                   position: {
                                     x:
                                       axis === "x"
@@ -913,7 +974,7 @@ export default function RightSidebar() {
                       isSpecialProperty={true}
                       specialPropertyValue={light.distance ?? 100}
                       onChange={(value) =>
-                        updateLight(light.id, { distance: value })
+                        setUpdateLight(light.id, { distance: value })
                       }
                     />
                   )}
@@ -927,13 +988,13 @@ export default function RightSidebar() {
                       isSpecialProperty={true}
                       specialPropertyValue={light.angle ?? Math.PI / 4}
                       onChange={(value) =>
-                        updateLight(light.id, { angle: value })
+                        setUpdateLight(light.id, { angle: value })
                       }
                     />
                   )}
 
                   <Button
-                    onClick={() => removeLight(light.id)}
+                    onClick={() => setRemoveLightFromScene(light.id)}
                     variant="customVariant"
                     size="sm"
                     className="text-xs hover:bg-destructive/20 text-destructive w-full"
@@ -991,7 +1052,68 @@ export default function RightSidebar() {
                   </div>
                 </div>
               ))}
+
+              <div className="grid items-center mb-2 grid-cols-8 text-xs">
+                <span className="col-span-2">Size</span>
+                <div className="flex items-center col-span-6 gap-1">
+                  {(is2D ? (["x", "y"] as const) : axes).map((axis) => (
+                    <div key={axis} className="relative h-full w-full">
+                      <Input
+                        type="number"
+                        disabled={selectedGeometry?.userData?.isLocked}
+                        className={
+                          "h-6 py-1 px-3.5 rounded-sm md:text-xs border-0 bg-borders focus-visible:ring-0 focus-visible:border selection:bg-hover/50" +
+                          (selectedGeometry?.userData?.isLocked
+                            ? " pointer-events-none select-none opacity-60"
+                            : "")
+                        }
+                        value={currentSize[axis].toFixed(2)}
+                        step={0.01}
+                        onChange={(e) =>
+                          handleSizeChange(axis, Number(e.target.value || 0))
+                        }
+                      />
+                      <span className="absolute left-0 top-1/2 ps-1 -translate-y-1/2 uppercase">
+                        {axis}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
+
+            <hr className="w-full bg-secondary/40 h-[1px] border-0" />
+
+            {isTransformControlsActive && (
+              <div className="mt-4 pb-3 hover:bg-cards/90 animate-in fade-in slide-in-from-top-1 duration-200">
+                <h3 className="mb-3 font-bold text-sm">Transform Mode</h3>
+                <div className="grid grid-cols-3 gap-2 p-1 bg-borders/30 rounded-md">
+                  {[
+                    { mode: "translate", icon: Move, label: "Move" },
+                    { mode: "rotate", icon: RotateCw, label: "Rotate" },
+                    { mode: "scale", icon: Scaling, label: "Scale" },
+                  ].map((item) => (
+                    <button
+                      key={item.mode}
+                      onClick={() =>
+                        setTransformMode(item.mode as TransformMode)
+                      }
+                      className={
+                        "flex flex-col items-center gap-1 py-1.5 rounded-sm transition-all " +
+                        (transformMode === item.mode
+                          ? "bg-secondary/50 text-white shadow-sm"
+                          : "hover:bg-borders/50 text-secondary/60")
+                      }
+                    >
+                      <item.icon size={16} />
+                      <span className="text-[10px] uppercase font-bold">
+                        {item.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <hr className="w-full bg-secondary/40 h-[1px] border-0" />
 
@@ -999,32 +1121,34 @@ export default function RightSidebar() {
               <h3 className="mb-3 font-bold text-sm">Material</h3>
 
               <div className={showGeometryColorPicker ? "min-h-[300px]" : ""}>
-                <div className="grid items-center mb-2 grid-cols-8">
-                  <span className="col-span-2">Type</span>
-                  <div className="flex items-center col-span-6 gap-1">
-                    <Select
-                      value={geometryMaterial.type}
-                      onValueChange={handleChangeMaterial}
-                    >
-                      <SelectTrigger
-                        size="sm"
-                        className="w-full text-xs overflow-hidden"
+                {!(selectedGeometry instanceof THREE.Group) && (
+                  <div className="grid items-center mb-2 grid-cols-8">
+                    <span className="col-span-2">Type</span>
+                    <div className="flex items-center col-span-6 gap-1">
+                      <Select
+                        value={geometryMaterial.type}
+                        onValueChange={handleChangeMaterial}
                       >
-                        <SelectValue className="truncate" />
-                      </SelectTrigger>
+                        <SelectTrigger
+                          size="sm"
+                          className="w-full text-xs overflow-hidden"
+                        >
+                          <SelectValue className="truncate" />
+                        </SelectTrigger>
 
-                      <SelectContent>
-                        <SelectGroup>
-                          {materials.map((mat) => (
-                            <SelectItem key={mat} value={mat}>
-                              {mat}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
+                        <SelectContent>
+                          <SelectGroup>
+                            {materials.map((mat) => (
+                              <SelectItem key={mat} value={mat}>
+                                {mat}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <CustomColorPicker
                   label="Color"
@@ -1041,7 +1165,7 @@ export default function RightSidebar() {
                       e,
                       (color) => setGeometryMaterial({ color }),
                       undefined,
-                      (selectedGeometry as THREE.Mesh).material,
+                      getMaterialFromObject(selectedGeometry),
                     )
                   }
                   onBlur={(e) =>
@@ -1049,7 +1173,7 @@ export default function RightSidebar() {
                       e.target.value,
                       (color) => setGeometryMaterial({ color }),
                       undefined,
-                      (selectedGeometry as THREE.Mesh).material,
+                      getMaterialFromObject(selectedGeometry),
                     )
                   }
                   onInputChange={(value) =>
@@ -1060,7 +1184,7 @@ export default function RightSidebar() {
                       color,
                       (color) => setGeometryMaterial({ color }),
                       undefined,
-                      (selectedGeometry as THREE.Mesh).material,
+                      getMaterialFromObject(selectedGeometry),
                     )
                   }
                   ref={geometryColorRef}
@@ -1110,20 +1234,19 @@ export default function RightSidebar() {
                   </div>
                 )}
 
-                {"wireframe" in (selectedGeometry as THREE.Mesh).material && (
-                  <div className="flex items-center gap-2 text-xs mb-2">
-                    <Checkbox
-                      id="wirframe"
-                      checked={!!geometryMaterial.props.wireframe}
-                      onCheckedChange={(checked) =>
-                        applyMaterialProperty({
-                          wireframe: checked,
-                        })
-                      }
-                    />
-                    <Label htmlFor="wirframe">Wireframe</Label>
-                  </div>
-                )}
+                {geometryMaterial?.props &&
+                  "wireframe" in geometryMaterial.props && (
+                    <div className="flex items-center gap-2 text-xs mb-2">
+                      <Checkbox
+                        id="wireframe"
+                        checked={!!geometryMaterial.props.wireframe}
+                        onCheckedChange={(checked) =>
+                          applyMaterialProperty({ wireframe: !!checked })
+                        }
+                      />
+                      <Label htmlFor="wireframe">Wireframe</Label>
+                    </div>
+                  )}
 
                 <div className="flex items-center gap-2 text-xs">
                   <Checkbox
@@ -1131,7 +1254,7 @@ export default function RightSidebar() {
                     checked={!!selectedGeometry?.visible}
                     onCheckedChange={(checked) => {
                       if (!selectedGeometry) return;
-                      setGeometryVisibility(selectedGeometry.uuid, !!checked);
+                      setObjectVisibility(selectedGeometry.uuid, !!checked);
                     }}
                   />
                   <Label htmlFor="visible">Visible</Label>

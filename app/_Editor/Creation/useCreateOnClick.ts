@@ -1,32 +1,20 @@
 import * as THREE from "three";
 import { useSceneStore } from "@/app/_store/store";
 import { GEOMETRIES_TYPE } from "./sceneGeometries";
-import { useShallow } from "zustand/shallow";
 
 export function useCreateOnClick(scene: THREE.Scene) {
-  const {
-    createMode,
-    ghostPos,
-    desiredShape,
-    setCreateMode,
-    setGhostPos,
-    setSceneObjects,
-    setSelectedGeometry,
-    setIsTransformControlsActive,
-  } = useSceneStore(
-    useShallow((s) => ({
-      createMode: s.createMode,
-      ghostPos: s.ghostPos,
-      desiredShape: s.desiredShape,
-      setCreateMode: s.setCreateMode,
-      setGhostPos: s.setGhostPos,
-      setSceneObjects: s.setSceneObjects,
-      setSelectedGeometry: s.setSelectedGeometry,
-      setIsTransformControlsActive: s.setIsTransformControlsActive,
-    })),
+  const setCreateMode = useSceneStore((s) => s.setCreateMode);
+  const setGhostPos = useSceneStore((s) => s.setGhostPos);
+  const setAddObjectsToScene = useSceneStore((s) => s.setAddObjectsToScene);
+  const setSelectedGeometry = useSceneStore((s) => s.setSelectedGeometry);
+  const setIsTransformControlsActive = useSceneStore(
+    (s) => s.setIsTransformControlsActive,
   );
 
   const onClick = () => {
+    const { createMode, ghostPos, desiredShape, sceneObjects } =
+      useSceneStore.getState();
+
     if (!createMode || !ghostPos || !desiredShape) return;
 
     const geometry = GEOMETRIES_TYPE[desiredShape]();
@@ -38,11 +26,31 @@ export function useCreateOnClick(scene: THREE.Scene) {
     });
 
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.userData.type = geometry.userData.type;
+
+    const baseType = geometry.userData.type;
+    const existingObjects = sceneObjects || [];
+    let maxSuffix = -1;
+
+    existingObjects.forEach((obj) => {
+      const type = obj.userData?.type;
+      if (type === baseType) {
+        maxSuffix = Math.max(maxSuffix, 0);
+      } else if (type && type.startsWith(baseType + " ")) {
+        const numStr = type.substring(baseType.length + 1);
+        const num = parseInt(numStr, 10);
+        if (!isNaN(num)) {
+          maxSuffix = Math.max(maxSuffix, num);
+        }
+      }
+    });
+
+    mesh.userData.type =
+      maxSuffix === -1 ? baseType : `${baseType} ${maxSuffix + 1}`;
+
     mesh.position.copy(ghostPos);
 
     scene.add(mesh);
-    setSceneObjects(mesh);
+    setAddObjectsToScene(mesh);
     setSelectedGeometry(mesh);
     setIsTransformControlsActive(true);
 

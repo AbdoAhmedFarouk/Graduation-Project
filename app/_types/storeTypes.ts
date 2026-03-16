@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import { GEOMETRIES_TYPE } from "../_Editor/Creation/sceneGeometries";
 
-type SceneGeometry = THREE.Mesh | THREE.Object3D;
+export type SceneGeometry = THREE.Mesh | THREE.Object3D | THREE.Group;
+
+export type TransformMode = "translate" | "rotate" | "scale"; 
 
 export type LightType =
   | "PointLight"
@@ -9,12 +11,12 @@ export type LightType =
   | "SpotLight"
   | "AmbientLight";
 
-interface SceneLight {
+export interface SceneLight {
   id: string;
   type: LightType;
   color: string;
   intensity: number;
-  position?: { x: number; y: number; z: number };
+  position: { x: number; y: number; z: number };
   distance?: number;
   angle?: number;
 }
@@ -50,16 +52,21 @@ export type SceneState = {
   sceneZoom: number;
   sceneLights: SceneLight[];
   isTransformControlsActive: boolean;
+  transformMode: "translate" | "rotate" | "scale";
+  isResizing: boolean;
+  resizeHandle: THREE.Object3D | null;
 
-  updateSceneZoom: (zoom: number) => void;
+  setIsResizing: (v: boolean) => void;
+  setResizeHandle: (h: THREE.Object3D | null) => void;
+  setUpdateSceneZoom: (zoom: number) => void;
   setScene: (scene: THREE.Scene) => void;
-  setSceneObjects: (obj: SceneGeometry) => void;
+  setAddObjectsToScene: (obj: SceneGeometry) => void;
   setSelectedGeometry: (obj: SceneGeometry | null) => void;
   setGhostPos: (pos: THREE.Vector3 | null) => void;
   setCreateMode: (state: boolean) => void;
   setDesiredShape: (shape: keyof typeof GEOMETRIES_TYPE | "") => void;
-  setLastSelected2D: (shape: string) => void;
-  setLastSelected3D: (shape: string) => void;
+  setLastSelected2D: (shape: string | null) => void;
+  setLastSelected3D: (shape: string | null) => void;
   setHoveredObjectId: (id: string | null) => void;
   setUpdateObjectName: (id: string, name: string) => void;
   setSceneBg: (color: string) => void;
@@ -75,8 +82,8 @@ export type SceneState = {
       props: Record<string, string | number | boolean | undefined>;
     }>,
   ) => void;
-  setGeometryVisibility: (objId: string, isVisible: boolean) => void;
-  setGeometryLocked: (objId: string, isLocked: boolean) => void;
+  setObjectVisibility: (objId: string, isVisible: boolean) => void;
+  setObjectLocked: (objId: string, isLocked: boolean) => void;
   setSceneFog: (patch: {
     type?: "" | "Fog" | "FogExp2";
     color?: string;
@@ -84,10 +91,12 @@ export type SceneState = {
     near?: number;
     far?: number;
   }) => void;
-  addLightToScene: (type?: LightType) => void;
-  updateLight: (id: string, patch: Partial<SceneLight>) => void;
-  removeLight: (id: string) => void;
+  setAddLightToScene: (type?: LightType) => void;
+  setUpdateLight: (id: string, patch: Partial<SceneLight>) => void;
+  setRemoveLightFromScene: (id: string) => void;
   setIsTransformControlsActive: (isActive: boolean) => void;
+  setTransformMode: (mode: "translate" | "rotate" | "scale") => void;
+  setDeleteSelectedObject: () => void;
 };
 
 export type MiddlebarState = {

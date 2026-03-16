@@ -1,8 +1,6 @@
 "use client";
 
-import * as THREE from "three";
-
-import { OrbitControls, useGLTF } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 
 import { useShallow } from "zustand/shallow";
@@ -11,14 +9,6 @@ import { useSceneStore } from "@/app/_store/store";
 import { GEOMETRIES_TYPE } from "@/app/_Editor/Creation/sceneGeometries";
 import MiddleBar from "../Panels/MiddleBar";
 import SceneRoot from "@/app/_Editor/Scene/SceneRoot";
-import { useRef } from "react";
-
-const AstronautModel = () => {
-  const gltf = useGLTF("/models/Astronaut-transformed.glb");
-  const modelRef = useRef<THREE.Object3D>(null!);
-
-  return <primitive ref={modelRef} object={gltf.scene} />;
-};
 
 export default function DesignPageWrapper() {
   const {
@@ -35,7 +25,12 @@ export default function DesignPageWrapper() {
     })),
   );
 
+  const setIsTransformControlsActive = useSceneStore(
+    (s) => s.setIsTransformControlsActive,
+  );
+
   const handleCreateGeometry = (clickedShape: keyof typeof GEOMETRIES_TYPE) => {
+    setIsTransformControlsActive(false);
     setDesiredShape(clickedShape);
     setCreateMode(true);
 
@@ -56,8 +51,6 @@ export default function DesignPageWrapper() {
       <div className="size-full">
         <Canvas shadows gl={{ antialias: true }}>
           <OrbitControls enableRotate={false} />
-
-          <AstronautModel />
 
           <SceneRoot />
         </Canvas>

@@ -54,7 +54,10 @@ export default function ShapeToolButton({
   return (
     <div className={wrapperClassName || "flex items-center h-8"}>
       <Comp
-        onClick={() => onClick?.(label as keyof typeof GEOMETRIES_TYPE)}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick?.(label as keyof typeof GEOMETRIES_TYPE);
+        }}
         ref={ref}
         data-tooltip={label}
         className={cn(tooltipClasses, baseClasses)}

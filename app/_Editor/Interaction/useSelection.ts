@@ -1,3 +1,5 @@
+"use client";
+
 import * as THREE from "three";
 import { useSceneStore } from "@/app/_store/store";
 
@@ -17,25 +19,54 @@ type ObjectUserData = {
 export function useSelection({
   domElement,
   intersectObjects,
-  sceneObjects,
-}: Params) {
-  const selectedGeometry = useSceneStore((s) => s.selectedGeometry);
+}: Omit<Params, "sceneObjects">) {
   const setSelectedGeometry = useSceneStore((s) => s.setSelectedGeometry);
-  const isTransforming = useSceneStore((s) => s.isTransformControlsActive);
 
   const onPointerDown = (event: PointerEvent) => {
-    if (event.target !== domElement || isTransforming) return;
+    const {
+      isTransformControlsActive,
+      selectedGeometry,
+      sceneObj,
+      sceneObjects,
+    } = useSceneStore.getState();
 
-    const hits = intersectObjects(sceneObjects).filter((h) => {
+    if (event.target !== domElement || isTransformControlsActive) return;
+
+    const objectsToIntersect = sceneObj
+      ? (sceneObj.children as THREE.Object3D[])
+      : [];
+
+    const hits = intersectObjects(objectsToIntersect).filter((h) => {
       const obj = h.object as THREE.Object3D & { userData?: ObjectUserData };
-      return obj.visible && obj.userData?.isVisible !== false;
+      let current: THREE.Object3D | null = obj;
+      while (current && current !== sceneObj) {
+        if (current.visible === false || current.userData?.isVisible === false)
+          return false;
+        current = current.parent;
+      }
+      return true;
     });
 
     const hit = hits[0]?.object;
 
-    if (hit instanceof THREE.Mesh) {
-      if (selectedGeometry?.uuid !== hit.uuid) {
-        setSelectedGeometry(hit);
+    if (hit) {
+      let current: THREE.Object3D | null = hit;
+      let found = false;
+
+      while (current && current !== sceneObj) {
+        if (sceneObjects.some((o) => o.uuid === current!.uuid)) {
+          found = true;
+          break;
+        }
+        current = current.parent;
+      }
+
+      const finalSelection = found ? current : null;
+
+      if (finalSelection && selectedGeometry?.uuid !== finalSelection.uuid) {
+        setSelectedGeometry(finalSelection as THREE.Mesh);
+      } else if (!finalSelection && selectedGeometry) {
+        setSelectedGeometry(null);
       }
       return;
     }
